@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SearchX, Search, AlertTriangle } from 'lucide-react';
+import { SearchX, Search, AlertTriangle, Heart, ThumbsDown, X as XIcon, Tag, Compass } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -13,6 +13,7 @@ import TagQuestions from '@/components/TagQuestions';
 import { useProfile } from '@/context/ProfileContext';
 import { getPopularMovies, searchMovies, extractTagsFromMovies } from '@/services/movieService';
 import { Movie, Tag } from '@/types';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -24,6 +25,7 @@ const Profile = () => {
   const [searchPerformed, setSearchPerformed] = useState(false);
   const [showTagQuestions, setShowTagQuestions] = useState(false);
   const [suggestedTags, setSuggestedTags] = useState<Tag[]>([]);
+  const isMobile = useIsMobile();
   
   // Load popular movies on initial render
   useEffect(() => {
@@ -156,12 +158,45 @@ const Profile = () => {
           
           {!showTagQuestions && (
             <Tabs defaultValue="discover" className="mb-8">
-              <TabsList className="mb-4">
-                <TabsTrigger value="discover">Discover Movies</TabsTrigger>
-                <TabsTrigger value="liked">Liked ({profile.likedMovies.length})</TabsTrigger>
-                <TabsTrigger value="disliked">Disliked ({profile.dislikedMovies.length})</TabsTrigger>
-                <TabsTrigger value="avoided">Avoided ({profile.avoidedMovies.length})</TabsTrigger>
-                <TabsTrigger value="tags">Tags ({profile.tags.length})</TabsTrigger>
+              <TabsList className="mb-4 flex overflow-x-auto scrollbar-none">
+                {isMobile ? (
+                  // Mobile tabs with icons
+                  <>
+                    <TabsTrigger value="discover" className="flex items-center gap-1">
+                      <Compass className="h-4 w-4" />
+                      <span className="sr-only md:not-sr-only">Discover</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="liked" className="flex items-center gap-1">
+                      <Heart className="h-4 w-4" />
+                      <span className="sr-only md:not-sr-only">Liked</span>
+                      <span className="text-xs">({profile.likedMovies.length})</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="disliked" className="flex items-center gap-1">
+                      <ThumbsDown className="h-4 w-4" />
+                      <span className="sr-only md:not-sr-only">Disliked</span>
+                      <span className="text-xs">({profile.dislikedMovies.length})</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="avoided" className="flex items-center gap-1">
+                      <XIcon className="h-4 w-4" />
+                      <span className="sr-only md:not-sr-only">Avoided</span>
+                      <span className="text-xs">({profile.avoidedMovies.length})</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="tags" className="flex items-center gap-1">
+                      <Tag className="h-4 w-4" />
+                      <span className="sr-only md:not-sr-only">Tags</span>
+                      <span className="text-xs">({profile.tags.length})</span>
+                    </TabsTrigger>
+                  </>
+                ) : (
+                  // Desktop tabs with text
+                  <>
+                    <TabsTrigger value="discover">Discover Movies</TabsTrigger>
+                    <TabsTrigger value="liked">Liked ({profile.likedMovies.length})</TabsTrigger>
+                    <TabsTrigger value="disliked">Disliked ({profile.dislikedMovies.length})</TabsTrigger>
+                    <TabsTrigger value="avoided">Avoided ({profile.avoidedMovies.length})</TabsTrigger>
+                    <TabsTrigger value="tags">Tags ({profile.tags.length})</TabsTrigger>
+                  </>
+                )}
               </TabsList>
               
               <TabsContent value="discover">
@@ -306,4 +341,3 @@ const Profile = () => {
 };
 
 export default Profile;
-

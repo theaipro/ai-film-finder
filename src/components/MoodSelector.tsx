@@ -1,13 +1,14 @@
 
 import React from 'react';
 import { Mood } from '@/types';
-import { Smile, Frown, Zap, Coffee, Brain, Bomb } from 'lucide-react';
+import { Smile, Frown, Zap, Coffee, Brain, Bomb, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface MoodSelectorProps {
   currentMood?: Mood;
-  onSelectMood: (mood: Mood) => void;
+  onSelectMood: (mood: Mood | undefined) => void;
 }
 
 interface MoodOption {
@@ -19,6 +20,8 @@ interface MoodOption {
 }
 
 const MoodSelector: React.FC<MoodSelectorProps> = ({ currentMood, onSelectMood }) => {
+  const isMobile = useIsMobile();
+  
   const moods: MoodOption[] = [
     {
       value: 'happy',
@@ -64,6 +67,15 @@ const MoodSelector: React.FC<MoodSelectorProps> = ({ currentMood, onSelectMood }
     }
   ];
 
+  const handleMoodClick = (mood: Mood) => {
+    // Toggle mood off if already selected
+    if (currentMood === mood) {
+      onSelectMood(undefined);
+    } else {
+      onSelectMood(mood);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-medium">How are you feeling today?</h3>
@@ -77,15 +89,20 @@ const MoodSelector: React.FC<MoodSelectorProps> = ({ currentMood, onSelectMood }
             key={mood.value}
             variant="outline"
             className={cn(
-              "h-auto flex flex-col items-center justify-center p-4 transition-all",
+              "h-auto flex flex-col items-center justify-center p-4 transition-all relative",
               mood.color,
               currentMood === mood.value && "ring-2 ring-primary"
             )}
-            onClick={() => onSelectMood(mood.value)}
+            onClick={() => handleMoodClick(mood.value)}
           >
+            {currentMood === mood.value && (
+              <div className="absolute top-1 right-1">
+                <X className="h-3 w-3 opacity-70" />
+              </div>
+            )}
             <div className="mb-2">{mood.icon}</div>
             <span className="font-medium mb-1">{mood.label}</span>
-            <span className="text-xs text-center">{mood.description}</span>
+            {!isMobile && <span className="text-xs text-center">{mood.description}</span>}
           </Button>
         ))}
       </div>

@@ -11,7 +11,7 @@ const Mood = () => {
   const navigate = useNavigate();
   const { profile, setCurrentMood } = useProfile();
   
-  const handleMoodSelect = (mood: MoodType) => {
+  const handleMoodSelect = (mood: MoodType | undefined) => {
     setCurrentMood(mood);
   };
   
@@ -20,6 +20,8 @@ const Mood = () => {
   };
   
   const handleSkip = () => {
+    // Clear the current mood if skipping
+    setCurrentMood(undefined);
     navigate('/recommendations');
   };
   
@@ -46,12 +48,11 @@ const Mood = () => {
               variant="outline" 
               onClick={handleSkip}
             >
-              Skip for now
+              Use Tags Instead
             </Button>
             
             <Button 
               onClick={handleContinue}
-              disabled={!profile.currentMood}
               className="bg-film-primary hover:bg-film-primary/90 text-white"
             >
               Get Recommendations

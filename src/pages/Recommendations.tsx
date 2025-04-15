@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, RefreshCw, Tag as TagIcon, ThumbsUp, CirclePercent, Plus } from 'lucide-react';
+import { ArrowRight, RefreshCw, Tag as TagIcon, ThumbsUp, CirclePercent, Plus, Filter, CheckSquare, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,15 @@ import {
 } from '@/services/movieService';
 import { Movie, Mood, Tag } from '@/types';
 import { toast } from 'sonner';
+import { 
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const Recommendations = () => {
   const { profile, setCurrentMood } = useProfile();
@@ -28,6 +37,9 @@ const Recommendations = () => {
   const [usedTagTiers, setUsedTagTiers] = useState(0);
   const [totalTagTiers, setTotalTagTiers] = useState(0);
   const [canShowMore, setCanShowMore] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const isMobile = useIsMobile();
   
   useEffect(() => {
     // Ensure profile.tags is an array before calling categorizeTagsByType
@@ -43,21 +55,22 @@ const Recommendations = () => {
     }
   }, [profile.tags]);
   
-  const fetchRecommendations = async (relaxConstraints = false) => {
+  const fetchRecommendations = async (relaxConstraints = false, useSelectedTags = false) => {
     try {
       setLoading(true);
       let movies: Movie[] = [];
       
-      if (profile.currentMood) {
+      if (profile.currentMood && !useSelectedTags) {
         movies = await getMoodBasedRecommendations(profile.currentMood);
         setUsedTagTiers(0);
         setCanShowMore(false);
-      } else if (profile.tags && Array.isArray(profile.tags) && profile.tags.length > 0) {
+      } else if ((profile.tags && Array.isArray(profile.tags) && profile.tags.length > 0) || 
+                (useSelectedTags && selectedTags.length > 0)) {
         const likedMovieIds = Array.isArray(profile.likedMovies) ? profile.likedMovies.map(m => m.id) : [];
         const dislikedMovieIds = Array.isArray(profile.dislikedMovies) ? profile.dislikedMovies.map(m => m.id) : [];
         const avoidedMovieIds = Array.isArray(profile.avoidedMovies) ? profile.avoidedMovies.map(m => m.id) : [];
         
-        const tagsForRecommendation = profile.tags;
+        const tagsForRecommendation = useSelectedTags && selectedTags.length > 0 ? selectedTags : profile.tags;
         const avoidedTags = Array.isArray(profile.avoidedTags) ? profile.avoidedTags : [];
         
         // If relaxing constraints, add more tiers
@@ -118,21 +131,42 @@ const Recommendations = () => {
     setShowMoodSelector(!showMoodSelector);
   };
   
-  const handleMoodSelect = (mood: Mood) => {
+  const handleMoodSelect = (mood: Mood | undefined) => {
     setCurrentMood(mood);
     setShowMoodSelector(false);
+    
+    // Clear selected tags when changing mood
+    setSelectedTags([]);
+    
+    if (!mood) {
+      // If mood is cleared, fetch tag-based recommendations
+      fetchRecommendations(false, false);
+    }
   };
   
   const handleRefresh = () => {
-    fetchRecommendations(false); // Start fresh
+    fetchRecommendations(false, selectedTags.length > 0); // Start fresh
   };
   
   const handleShowMore = () => {
-    fetchRecommendations(true); // Relax constraints
+    fetchRecommendations(true, selectedTags.length > 0); // Relax constraints
   };
   
   const handleMovieDetails = (movie: Movie) => {
     window.open(`https://www.themoviedb.org/movie/${movie.id}`, '_blank');
+  };
+  
+  const toggleTagSelection = (tag: Tag) => {
+    if (selectedTags.some(t => t.id === tag.id)) {
+      setSelectedTags(selectedTags.filter(t => t.id !== tag.id));
+    } else {
+      setSelectedTags([...selectedTags, tag]);
+    }
+  };
+  
+  const handleTagBasedRecommendations = () => {
+    fetchRecommendations(false, true);
+    setIsFilterOpen(false);
   };
   
   const renderCategorizedTags = () => {
@@ -206,12 +240,95 @@ const Recommendations = () => {
                 {profile.currentMood ? "Change Mood" : "Set Mood"}
               </Button>
               
+              <Sheet open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline">
+                    <Filter className="h-4 w-4 mr-2" />
+                    {isMobile ? "" : "Filter by Tags"}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent>
+                  <SheetHeader>
+                    <SheetTitle>Filter by Tags</SheetTitle>
+                    <SheetDescription>
+                      Select specific tags to customize your recommendations
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className="py-4 space-y-4">
+                    {Object.entries(categorizedTags).map(([type, groups]) => (
+                      <div key={type} className="space-y-2">
+                        <h3 className="text-sm font-semibold capitalize">{type}s</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {groups.flat().map(tag => (
+                            <Button
+                              key={tag.id}
+                              variant="outline"
+                              size="sm"
+                              className={`flex items-center gap-1 ${
+                                selectedTags.some(t => t.id === tag.id) 
+                                  ? "bg-primary/20 border-primary" 
+                                  : ""
+                              }`}
+                              onClick={() => toggleTagSelection(tag)}
+                            >
+                              {selectedTags.some(t => t.id === tag.id) ? (
+                                <CheckSquare className="h-4 w-4" />
+                              ) : (
+                                <Square className="h-4 w-4" />
+                              )}
+                              {tag.name}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="pt-4">
+                      <Button 
+                        className="w-full" 
+                        onClick={handleTagBasedRecommendations}
+                        disabled={selectedTags.length === 0}
+                      >
+                        Get Recommendations
+                      </Button>
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
+              
               <Button onClick={handleRefresh} disabled={loading}>
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
               </Button>
             </div>
           </div>
+          
+          {selectedTags.length > 0 && (
+            <Alert className="mb-6 bg-film-tag/50 border-film-primary/20">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <TagIcon className="h-4 w-4 text-film-primary" />
+                  <span className="text-sm font-medium">Filtered by {selectedTags.length} tags:</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedTags.map(tag => (
+                    <Badge 
+                      key={tag.id}
+                      variant="outline" 
+                      className="bg-primary/20 border-primary flex items-center gap-1"
+                    >
+                      {tag.name}
+                      <button 
+                        onClick={() => toggleTagSelection(tag)}
+                        className="ml-1 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </Alert>
+          )}
           
           {profile.currentMood && !showMoodSelector && (
             <Alert className="mb-6 bg-film-tag/50 border-film-primary/20">
@@ -226,7 +343,7 @@ const Recommendations = () => {
             </Alert>
           )}
           
-          {profile.tags && Array.isArray(profile.tags) && profile.tags.length > 0 && !profile.currentMood && (
+          {profile.tags && Array.isArray(profile.tags) && profile.tags.length > 0 && !profile.currentMood && !selectedTags.length && (
             <Alert className="mb-6 bg-film-tag/50 border-film-primary/20">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -250,6 +367,20 @@ const Recommendations = () => {
                 currentMood={profile.currentMood}
                 onSelectMood={handleMoodSelect}
               />
+              
+              {!profile.currentMood && (
+                <div className="mt-6 text-center">
+                  <Button 
+                    onClick={() => {
+                      setShowMoodSelector(false);
+                      fetchRecommendations(false, selectedTags.length > 0);
+                    }}
+                    variant="outline"
+                  >
+                    Use Tags Instead
+                  </Button>
+                </div>
+              )}
             </div>
           )}
           
