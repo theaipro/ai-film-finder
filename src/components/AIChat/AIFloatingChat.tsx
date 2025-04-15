@@ -1,50 +1,43 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useProfile } from '@/context/ProfileContext';
-import { geminiService, GeminiService } from '@/services/geminiService';
-import { MessageSquare, X, Send, Loader2, Maximize2, Minimize2, Settings } from 'lucide-react';
+import { generateResponse } from '@/services/geminiService';
+import { MessageSquare, X, Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import AIChatMessage from './AIChatMessage';
-import AIChatConfig from './AIChatConfig';
+import MovieCard from '@/components/MovieCard';
+import { Movie } from '@/types';
+import { getMovieDetails, searchMovies } from '@/services/movieService';
 
 interface Message {
   id: string;
   content: string;
   role: 'user' | 'assistant';
   timestamp: Date;
+  movies?: Movie[];
 }
 
 const AIFloatingChat = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      content: "Hello! I'm your movie assistant. Ask me about movies, recommendations, or your preferences!",
+      content: "Hello! I'm your movie assistant. I can help you find movies and provide recommendations. Try asking me about specific movies or genres!",
       role: 'assistant',
       timestamp: new Date()
     }
   ]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isConfigOpen, setIsConfigOpen] = useState(false);
-  const [apiKeySet, setApiKeySet] = useState(false);
-  const [geminiInstance, setGeminiInstance] = useState<GeminiService | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { profile } = useProfile();
-
-  useEffect(() => {
-    const savedApiKey = localStorage.getItem('gemini_api_key');
-    if (savedApiKey) {
-      setApiKeySet(true);
-      setGeminiInstance(new GeminiService(savedApiKey));
-    } else {
-      setApiKeySet(true);
-    }
-  }, []);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -59,10 +52,6 @@ const AIFloatingChat = () => {
     if (isOpen && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [isOpen]);
-
-  useEffect(() => {
-    setApiKeySet(true);
   }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -82,19 +71,33 @@ const AIFloatingChat = () => {
     setIsLoading(true);
     
     try {
-      const service = geminiInstance || geminiService;
-      
-      const response = await service.generateResponse(
+      const response = await generateResponse(
         inputValue,
         profile,
         [...(profile?.likedMovies || []), ...(profile?.dislikedMovies || [])].slice(0, 5)
       );
       
+      // Extract movie IDs from the response using regex
+      const movieIdRegex = /\[MOVIE_ID:(\d+)\]/g;
+      const movieIds = [...response.matchAll(movieIdRegex)].map(match => parseInt(match[1]));
+      
+      // Fetch movie details if any IDs were found
+      let movies: Movie[] = [];
+      if (movieIds.length > 0) {
+        const moviePromises = movieIds.map(id => getMovieDetails(id));
+        const movieDetails = await Promise.all(moviePromises);
+        movies = movieDetails.filter((m): m is Movie => m !== null);
+      }
+      
+      // Clean up the response by removing the movie ID tags
+      const cleanResponse = response.replace(movieIdRegex, '');
+      
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: response,
+        content: cleanResponse,
         role: 'assistant',
-        timestamp: new Date()
+        timestamp: new Date(),
+        movies: movies.length > 0 ? movies : undefined
       };
       
       setMessages(prev => [...prev, aiMessage]);
@@ -106,35 +109,83 @@ const AIFloatingChat = () => {
     }
   };
 
-  const toggleChat = () => {
-    setIsOpen(prev => !prev);
-  };
+  const ChatContent = () => (
+    <div className="flex flex-col h-full">
+      <ScrollArea className="flex-1 p-3" ref={scrollAreaRef}>
+        <div className="flex flex-col gap-3">
+          {messages.map((message) => (
+            <div key={message.id} className="space-y-3">
+              <AIChatMessage message={message} />
+              {message.movies && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                  {message.movies.map((movie) => (
+                    <MovieCard key={movie.id} movie={movie} />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          
+          {isLoading && (
+            <div className="self-start bg-muted rounded-lg rounded-tl-none p-3 max-w-[85%]">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Thinking...</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+      
+      <form onSubmit={handleSubmit} className="border-t p-3">
+        <div className="flex gap-2">
+          <Input
+            ref={inputRef}
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+            placeholder="Ask about movies..."
+            disabled={isLoading}
+            className="flex-1"
+          />
+          <Button 
+            type="submit" 
+            size="icon" 
+            disabled={isLoading || !inputValue.trim()}
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
 
-  const toggleExpand = () => {
-    setIsExpanded(prev => !prev);
-  };
-
-  const clearChat = () => {
-    setMessages([
-      {
-        id: 'welcome',
-        content: "Chat cleared! How can I help you with movies today?",
-        role: 'assistant',
-        timestamp: new Date()
-      }
-    ]);
-  };
-
-  const handleSaveApiKey = (apiKey: string) => {
-    setApiKeySet(true);
-    setGeminiInstance(new GeminiService(apiKey));
-  };
+  if (isMobile) {
+    return (
+      <Drawer>
+        <DrawerTrigger asChild>
+          <Button 
+            size="icon" 
+            className="fixed bottom-4 right-4 h-12 w-12 rounded-full bg-primary shadow-lg hover:bg-primary/90"
+          >
+            <MessageSquare className="h-6 w-6" />
+          </Button>
+        </DrawerTrigger>
+        <DrawerContent className="h-[90vh]">
+          <ChatContent />
+        </DrawerContent>
+      </Drawer>
+    );
+  }
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end">
       {!isOpen && (
         <Button 
-          onClick={toggleChat} 
+          onClick={() => setIsOpen(true)} 
           size="icon" 
           className="h-12 w-12 rounded-full bg-primary shadow-lg hover:bg-primary/90"
         >
@@ -143,94 +194,19 @@ const AIFloatingChat = () => {
       )}
       
       {isOpen && (
-        <div 
-          className={`bg-background border rounded-lg shadow-xl flex flex-col ${
-            isExpanded 
-              ? 'fixed top-4 right-4 left-4 bottom-4 md:left-auto md:w-[500px]' 
-              : 'w-[350px] md:w-[400px] h-[500px]'
-          }`}
-        >
+        <div className="bg-background border rounded-lg shadow-xl flex flex-col w-[350px] md:w-[400px] h-[500px]">
           <div className="flex items-center justify-between p-3 border-b">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" />
               <h3 className="font-medium">Movie AI Assistant</h3>
             </div>
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" onClick={() => setIsConfigOpen(true)} className="h-8 w-8">
-                <Settings className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={toggleExpand} className="h-8 w-8">
-                {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-              </Button>
-              <Button variant="ghost" size="icon" onClick={toggleChat} className="h-8 w-8">
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+            <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="h-8 w-8">
+              <X className="h-4 w-4" />
+            </Button>
           </div>
-          
-          <ScrollArea className="flex-1 p-3" ref={scrollAreaRef}>
-            <div className="flex flex-col gap-3">
-              {messages.map((message) => (
-                <AIChatMessage key={message.id} message={message} />
-              ))}
-              
-              {isLoading && (
-                <div className="self-start bg-muted rounded-lg rounded-tl-none p-3 max-w-[85%]">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Thinking...</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </ScrollArea>
-          
-          <form onSubmit={handleSubmit} className="border-t p-3">
-            <div className="flex gap-2">
-              <Input
-                ref={inputRef}
-                value={inputValue}
-                onChange={e => setInputValue(e.target.value)}
-                placeholder="Ask about movies..."
-                disabled={isLoading}
-                className="flex-1"
-              />
-              <Button 
-                type="submit" 
-                size="icon" 
-                disabled={isLoading || !inputValue.trim()}
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-            
-            <div className="flex justify-between mt-2">
-              <div className="ml-auto">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearChat}
-                  className="text-xs text-muted-foreground"
-                >
-                  Clear chat
-                </Button>
-              </div>
-            </div>
-          </form>
+          <ChatContent />
         </div>
       )}
-      
-      <AIChatConfig
-        isOpen={isConfigOpen}
-        onClose={() => setIsConfigOpen(false)}
-        onSave={handleSaveApiKey}
-        defaultApiKey={localStorage.getItem('gemini_api_key') || ''}
-      />
     </div>
   );
 };
