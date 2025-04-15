@@ -12,7 +12,7 @@ import TagSelector from '@/components/TagSelector';
 import TagQuestions from '@/components/TagQuestions';
 import { useProfile } from '@/context/ProfileContext';
 import { getPopularMovies, searchMovies, extractTagsFromMovies } from '@/services/movieService';
-import { Movie, Tag } from '@/types';
+import { Movie, Tag as TagType } from '@/types';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 const Profile = () => {

@@ -1,5 +1,4 @@
 
-
 export interface Movie {
   id: number;
   title: string;
@@ -9,7 +8,7 @@ export interface Movie {
   vote_average: number;
   genres?: Genre[];
   genre_ids?: number[];
-  likabilityPercentage?: number; // Add the likabilityPercentage property
+  likabilityPercentage?: number;
 }
 
 export interface Genre {
@@ -27,9 +26,9 @@ export type TagType =
   | 'tone'
   | 'length'
   | 'era'
-  | 'keyword'  // Added keyword as a tag type
-  | 'actor'    // Added actor type
-  | 'director' // Added director type
+  | 'keyword'
+  | 'actor'
+  | 'director'
   | 'custom';
 
 export interface Tag {
@@ -37,13 +36,13 @@ export interface Tag {
   name: string;
   source: 'auto' | 'manual';
   type: TagType;
-  occurrences?: number;    // Number of times this tag appears in liked movies
-  dislikedOccurrences?: number; // Number of times this tag appears in disliked movies
-  netScore?: number;       // Weighted score (occurrences - dislikedOccurrences * 2)
-  confirmed?: boolean;     // Whether this is a confirmed tag based on threshold
-  override?: boolean;      // Whether the user has manually overridden the tag status
-  movieIds?: number[];     // IDs of movies that contributed to this tag
-  dislikedMovieIds?: number[]; // IDs of disliked movies that contributed to this tag
+  occurrences?: number;
+  dislikedOccurrences?: number;
+  netScore?: number;
+  confirmed?: boolean;
+  override?: boolean;
+  movieIds?: number[];
+  dislikedMovieIds?: number[];
 }
 
 export type TagStatus = 'liked' | 'confirmed' | 'avoided';
@@ -53,14 +52,14 @@ export type Mood = 'happy' | 'sad' | 'excited' | 'relaxed' | 'thoughtful' | 'ten
 export interface UserProfile {
   likedMovies: Movie[];
   dislikedMovies: Movie[];
-  avoidedMovies: Movie[];  
+  avoidedMovies: Movie[];
   watchLaterMovies: Movie[];
-  likedTags: Tag[];        // Tags collected from liked movies
-  confirmedTags: Tag[];    // Tags that meet the frequency threshold
-  avoidedTags: Tag[];      // Tags the user explicitly wants to avoid
+  likedTags: Tag[];
+  confirmedTags: Tag[];
+  avoidedTags: Tag[];
   currentMood?: Mood;
   name?: string;
   bio?: string;
   favoriteGenres?: string[];
+  tags?: Tag[];
 }
-

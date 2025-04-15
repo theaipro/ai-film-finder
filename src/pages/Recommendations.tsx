@@ -16,7 +16,7 @@ import {
   categorizeTagsByType,
   groupTagsByWeight
 } from '@/services/movieService';
-import { Movie, Mood, Tag } from '@/types';
+import { Movie, Mood, Tag as TagType } from '@/types';
 import { toast } from 'sonner';
 import { 
   Sheet,

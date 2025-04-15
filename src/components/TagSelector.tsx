@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { Tag } from '@/types';
+import { Tag as TagType } from '@/types';
 import { X, Plus, Star, ChevronUp, ChevronDown, CirclePercent } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -9,8 +10,8 @@ import { useProfile } from '@/context/ProfileContext';
 import { categorizeTagsByType } from '@/services/movieService';
 
 interface TagSelectorProps {
-  tags: Tag[];
-  onAddTag: (tag: Tag) => void;
+  tags: TagType[];
+  onAddTag: (tag: TagType) => void;
   onRemoveTag: (tagId: string) => void;
 }
 

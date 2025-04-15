@@ -4,12 +4,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
-import { Tag } from '@/types';
+import { Tag as TagType } from '@/types';
 
 interface TagQuestionProps {
-  suggestedTags: Tag[];
-  existingTags: Tag[];
-  onSaveTags: (selectedTags: Tag[]) => void;
+  suggestedTags: TagType[];
+  existingTags: TagType[];
+  onSaveTags: (selectedTags: TagType[]) => void;
 }
 
 const TagQuestions: React.FC<TagQuestionProps> = ({ 
