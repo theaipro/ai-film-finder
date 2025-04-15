@@ -224,7 +224,7 @@ export const getMoodBasedRecommendations = async (mood: Mood, page = 1): Promise
   }
 };
 
-// Get recommendations based on tags and liked movies
+// Get recommendations based on tags and liked movies with likability percentage
 export const getTagBasedRecommendations = async (
   tags: Tag[],
   likedMovieIds: number[],
@@ -234,11 +234,9 @@ export const getTagBasedRecommendations = async (
   page = 1
 ): Promise<Movie[]> => {
   try {
-    // Prioritize confirmed tags over regular tags
+    // Separate tags by confirmation status
     const confirmedTags = tags.filter(tag => tag.confirmed);
-    
-    // If there are confirmed tags, use those preferentially
-    const tagsToUse = confirmedTags.length > 0 ? confirmedTags : tags;
+    const likedTags = tags.filter(tag => !tag.confirmed);
     
     // Track avoided genre IDs
     const avoidedGenreIds = avoidedTags
@@ -246,14 +244,40 @@ export const getTagBasedRecommendations = async (
       .map(tag => parseInt(tag.id.replace('genre-', '')))
       .filter(id => !isNaN(id));
     
-    // Extract genre IDs from prioritized tags, excluding avoided genres
-    const genreIds = tagsToUse
+    // Extract genre IDs from all tags, applying weights
+    // Confirmed tags get double weight
+    const genreWeights: Record<number, number> = {};
+    
+    // Process confirmed tags with double weight
+    confirmedTags
       .filter(tag => tag.type === 'genre')
-      .map(tag => parseInt(tag.id.replace('genre-', '')))
-      .filter(id => !isNaN(id) && !avoidedGenreIds.includes(id));
+      .forEach(tag => {
+        const genreId = parseInt(tag.id.replace('genre-', ''));
+        if (!isNaN(genreId) && !avoidedGenreIds.includes(genreId)) {
+          // Confirmed tags get double weight
+          genreWeights[genreId] = (genreWeights[genreId] || 0) + (tag.occurrences || 1) * 2;
+        }
+      });
+    
+    // Process liked tags with normal weight
+    likedTags
+      .filter(tag => tag.type === 'genre')
+      .forEach(tag => {
+        const genreId = parseInt(tag.id.replace('genre-', ''));
+        if (!isNaN(genreId) && !avoidedGenreIds.includes(genreId)) {
+          // Liked tags get normal weight
+          genreWeights[genreId] = (genreWeights[genreId] || 0) + (tag.occurrences || 1);
+        }
+      });
+    
+    // Get the top weighted genres
+    const topGenreIds = Object.entries(genreWeights)
+      .sort((a, b) => Number(b[1]) - Number(a[1]))
+      .slice(0, 5) // Limit to top 5 genres for better API results
+      .map(entry => Number(entry[0]));
     
     // If no genre IDs or liked movies, return popular movies
-    if (genreIds.length === 0 && likedMovieIds.length === 0) {
+    if (topGenreIds.length === 0 && likedMovieIds.length === 0) {
       return getPopularMovies(page);
     }
     
@@ -263,8 +287,8 @@ export const getTagBasedRecommendations = async (
       sort_by: 'popularity.desc'
     };
     
-    if (genreIds.length > 0) {
-      params.with_genres = genreIds.join(',');
+    if (topGenreIds.length > 0) {
+      params.with_genres = topGenreIds.join(',');
     }
     
     // Get recommendations from the API
@@ -279,9 +303,82 @@ export const getTagBasedRecommendations = async (
       );
     }
     
+    // Calculate likability percentage for each movie
+    results = results.map(movie => {
+      let likabilityScore = 0;
+      let maxPossibleScore = 0;
+      
+      // Calculate score based on matching genres
+      if (movie.genre_ids) {
+        movie.genre_ids.forEach(genreId => {
+          // If this genre is in our weights, add its weight to the score
+          if (genreWeights[genreId]) {
+            likabilityScore += genreWeights[genreId];
+          }
+          
+          // Add to max possible score the highest weight in our system
+          // This helps normalize the percentage
+          maxPossibleScore += Math.max(...Object.values(genreWeights), 1);
+        });
+      }
+      
+      // Calculate percentage, with a minimum of 50% as these are already recommended
+      const likabilityPercentage = maxPossibleScore > 0 
+        ? Math.min(100, Math.max(50, Math.round((likabilityScore / maxPossibleScore) * 100)))
+        : 70; // Default if we can't calculate
+      
+      return {
+        ...movie,
+        likabilityPercentage
+      };
+    });
+    
+    // Sort by likability percentage (high to low)
+    results.sort((a, b) => 
+      (b.likabilityPercentage || 0) - (a.likabilityPercentage || 0)
+    );
+    
     return results;
   } catch (error) {
     console.error('Error fetching tag-based recommendations:', error);
     return [];
   }
+};
+
+// Group tags by category (type) in batches of 5
+export const categorizeTagsByType = (tags: Tag[]): Record<string, Tag[][]> => {
+  // Group tags by type first
+  const tagsByType: Record<string, Tag[]> = {};
+  
+  tags.forEach(tag => {
+    if (!tagsByType[tag.type]) {
+      tagsByType[tag.type] = [];
+    }
+    tagsByType[tag.type].push(tag);
+  });
+  
+  // Then subdivide each type into groups of 5
+  const categorizedTags: Record<string, Tag[][]> = {};
+  
+  Object.entries(tagsByType).forEach(([type, tagsOfType]) => {
+    // Sort tags by occurrence/importance
+    const sortedTags = [...tagsOfType].sort((a, b) => {
+      // First by confirmed status
+      if (a.confirmed && !b.confirmed) return -1;
+      if (!a.confirmed && b.confirmed) return 1;
+      
+      // Then by occurrences
+      return (b.occurrences || 0) - (a.occurrences || 0);
+    });
+    
+    // Split into groups of 5
+    const groups: Tag[][] = [];
+    for (let i = 0; i < sortedTags.length; i += 5) {
+      groups.push(sortedTags.slice(i, i + 5));
+    }
+    
+    categorizedTags[type] = groups;
+  });
+  
+  return categorizedTags;
 };

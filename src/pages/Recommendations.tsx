@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, RefreshCw, Tag as TagIcon, ThumbsUp } from 'lucide-react';
+import { ArrowRight, RefreshCw, Tag as TagIcon, ThumbsUp, CirclePercent } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import Navbar from '@/components/Navbar';
 import MovieCard from '@/components/MovieCard';
 import MoodSelector from '@/components/MoodSelector';
+import LikabilityBadge from '@/components/LikabilityBadge';
 import { useProfile } from '@/context/ProfileContext';
 import { 
   getTagBasedRecommendations, 
   getMoodBasedRecommendations,
-  getPopularMovies 
+  getPopularMovies,
+  categorizeTagsByType
 } from '@/services/movieService';
-import { Movie, Mood } from '@/types';
+import { Movie, Mood, Tag } from '@/types';
 import { toast } from 'sonner';
 
 const Recommendations = () => {
@@ -20,28 +22,27 @@ const Recommendations = () => {
   const [recommendations, setRecommendations] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(false);
   const [showMoodSelector, setShowMoodSelector] = useState(false);
+  const [categorizedTags, setCategorizedTags] = useState<Record<string, Tag[][]>>({});
+  
+  useEffect(() => {
+    if (profile.tags && profile.tags.length > 0) {
+      setCategorizedTags(categorizeTagsByType(profile.tags));
+    }
+  }, [profile.tags]);
   
   const fetchRecommendations = async () => {
     try {
       setLoading(true);
       let movies: Movie[] = [];
       
-      // If user has a current mood, prioritize mood-based recommendations
       if (profile.currentMood) {
         movies = await getMoodBasedRecommendations(profile.currentMood);
-      } 
-      // Otherwise use tag-based recommendations - prefer confirmed tags when available
-      else if (profile.tags && profile.tags.length > 0) {
+      } else if (profile.tags && profile.tags.length > 0) {
         const likedMovieIds = profile.likedMovies ? profile.likedMovies.map(m => m.id) : [];
         const dislikedMovieIds = profile.dislikedMovies ? profile.dislikedMovies.map(m => m.id) : [];
         const avoidedMovieIds = profile.avoidedMovies ? profile.avoidedMovies.map(m => m.id) : [];
         
-        // Use the appropriate tag set for recommendations:
-        // 1. Confirmed tags if there are any (more reliable)
-        // 2. All tags as a fallback (less reliable but better than nothing)
         const tagsForRecommendation = profile.tags;
-        
-        // Get avoided tags if any
         const avoidedTags = profile.avoidedTags || [];
         
         movies = await getTagBasedRecommendations(
@@ -51,13 +52,10 @@ const Recommendations = () => {
           avoidedMovieIds,
           avoidedTags
         );
-      } 
-      // Fallback to popular movies if no mood or tags
-      else {
+      } else {
         movies = await getPopularMovies();
       }
       
-      // Filter out movies the user has already liked, disliked or avoided
       if (movies && movies.length > 0) {
         const existingMovieIds = [
           ...(profile.likedMovies || []).map(m => m.id),
@@ -79,17 +77,6 @@ const Recommendations = () => {
     }
   };
   
-  // Fetch recommendations on initial render or when profile changes
-  useEffect(() => {
-    fetchRecommendations();
-  }, [
-    profile.currentMood, 
-    profile.tags?.length, 
-    profile.likedMovies?.length, 
-    profile.dislikedMovies?.length,
-    profile.avoidedMovies?.length
-  ]);
-  
   const handleChangeMood = () => {
     setShowMoodSelector(!showMoodSelector);
   };
@@ -104,8 +91,57 @@ const Recommendations = () => {
   };
   
   const handleMovieDetails = (movie: Movie) => {
-    // In a more complete app, this would navigate to a movie details page
     window.open(`https://www.themoviedb.org/movie/${movie.id}`, '_blank');
+  };
+  
+  const renderCategorizedTags = () => {
+    const tagTypeLabels = {
+      'genre': 'Genres',
+      'theme': 'Themes',
+      'tone': 'Tones',
+      'custom': 'Custom Tags',
+      'keyword': 'Keywords',
+      'actor': 'Actors',
+      'director': 'Directors'
+    };
+    
+    const topCategories = Object.entries(categorizedTags).slice(0, 2);
+    
+    return (
+      <div className="space-y-2">
+        {topCategories.map(([type, groups]) => (
+          <div key={type} className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium">
+              {tagTypeLabels[type as keyof typeof tagTypeLabels] || type}:
+            </span>
+            
+            {groups[0]?.map(tag => (
+              <Badge 
+                key={tag.id} 
+                variant="outline" 
+                className={tag.confirmed 
+                  ? "bg-blue-200 dark:bg-blue-900/60 font-medium flex items-center gap-1"
+                  : "bg-film-tag/50 flex items-center gap-1"
+                }
+                title={tag.confirmed 
+                  ? `Confirmed tag (double weight, appears in ${tag.occurrences || 0} movies)` 
+                  : `Regular tag (normal weight, appears in ${tag.occurrences || 0} movies)`
+                }
+              >
+                {tag.name}
+                {tag.confirmed && <CirclePercent className="h-3 w-3 ml-1 opacity-80" />}
+              </Badge>
+            ))}
+            
+            {groups.length > 1 && (
+              <Badge variant="outline" className="bg-film-tag/50">
+                +{groups.slice(1).reduce((count, group) => count + group.length, 0)} more
+              </Badge>
+            )}
+          </div>
+        ))}
+      </div>
+    );
   };
   
   return (
@@ -136,7 +172,6 @@ const Recommendations = () => {
             </div>
           </div>
           
-          {/* Mood info */}
           {profile.currentMood && !showMoodSelector && (
             <Alert className="mb-6 bg-film-tag/50 border-film-primary/20">
               <div className="flex items-center">
@@ -150,56 +185,19 @@ const Recommendations = () => {
             </Alert>
           )}
           
-          {/* Tag info */}
           {profile.tags && profile.tags.length > 0 && !profile.currentMood && (
             <Alert className="mb-6 bg-film-tag/50 border-film-primary/20">
-              <div className="flex flex-wrap items-center gap-2">
-                <TagIcon className="h-4 w-4 text-film-primary" />
-                <span className="text-sm">Based on your preferences:</span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <TagIcon className="h-4 w-4 text-film-primary" />
+                  <span className="text-sm font-medium">Based on your preferences:</span>
+                </div>
                 
-                {/* Confirmed tags first with star indicator */}
-                {profile.tags
-                  .filter(tag => tag.confirmed)
-                  .slice(0, 3)
-                  .map(tag => (
-                    <Badge 
-                      key={tag.id} 
-                      variant="outline" 
-                      className="bg-blue-200 dark:bg-blue-900/60 font-medium"
-                      title={`Confirmed tag (appears in ${tag.occurrences || 0} movies)`}
-                    >
-                      ★ {tag.name}
-                    </Badge>
-                  ))}
-                
-                {/* Then other tags */}
-                {profile.tags
-                  .filter(tag => !tag.confirmed)
-                  .slice(0, profile.tags.filter(t => t.confirmed).length < 3 ? 5 - profile.tags.filter(t => t.confirmed).length : 2)
-                  .map(tag => (
-                    <Badge 
-                      key={tag.id} 
-                      variant="outline" 
-                      className="bg-film-tag/50"
-                      title={`Tag appears in ${tag.occurrences || 0} movies`}
-                    >
-                      {tag.name}
-                    </Badge>
-                  ))}
-                
-                {/* Display tags count summary */}
-                {profile.tags.length > 5 && (
-                  <Badge variant="outline" className="bg-film-tag/50">
-                    +{profile.tags.length - 5} more 
-                    {profile.tags.filter(t => t.confirmed).length > 0 && 
-                      ` (${profile.tags.filter(t => t.confirmed).length} confirmed)`}
-                  </Badge>
-                )}
+                {renderCategorizedTags()}
               </div>
             </Alert>
           )}
           
-          {/* Mood selector */}
           {showMoodSelector && (
             <div className="bg-card rounded-lg shadow-sm p-6 mb-8">
               <MoodSelector 
@@ -209,7 +207,6 @@ const Recommendations = () => {
             </div>
           )}
           
-          {/* Check if user has enough preferences */}
           {(!profile.likedMovies || profile.likedMovies.length === 0) && (
             <Alert className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-900">
               <AlertDescription className="flex items-center">
@@ -223,10 +220,8 @@ const Recommendations = () => {
             </Alert>
           )}
           
-          {/* Recommendations grid */}
           <div className="mb-8">
             {loading ? (
-              // Placeholder loading state
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {Array(8).fill(null).map((_, index) => (
                   <div key={index} className="rounded-lg bg-muted animate-pulse h-[380px]"></div>
@@ -235,11 +230,17 @@ const Recommendations = () => {
             ) : recommendations.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {recommendations.map(movie => (
-                  <MovieCard 
-                    key={movie.id} 
-                    movie={movie} 
-                    onViewDetails={handleMovieDetails}
-                  />
+                  <div key={movie.id} className="relative">
+                    <MovieCard 
+                      movie={movie} 
+                      onViewDetails={handleMovieDetails}
+                    />
+                    {movie.likabilityPercentage && (
+                      <div className="absolute top-2 right-2">
+                        <LikabilityBadge percentage={movie.likabilityPercentage} />
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             ) : (
