@@ -13,6 +13,7 @@ import {
   getPopularMovies 
 } from '@/services/movieService';
 import { Movie, Mood } from '@/types';
+import { toast } from 'sonner';
 
 const Recommendations = () => {
   const { profile, setCurrentMood } = useProfile();
@@ -21,42 +22,52 @@ const Recommendations = () => {
   const [showMoodSelector, setShowMoodSelector] = useState(false);
   
   const fetchRecommendations = async () => {
-    setLoading(true);
-    let movies: Movie[] = [];
-    
-    // If user has a current mood, prioritize mood-based recommendations
-    if (profile.currentMood) {
-      movies = await getMoodBasedRecommendations(profile.currentMood);
-    } 
-    // Otherwise use tag-based recommendations
-    else if (profile.tags.length > 0) {
-      const likedMovieIds = profile.likedMovies.map(m => m.id);
-      const dislikedMovieIds = profile.dislikedMovies.map(m => m.id);
-      const avoidedMovieIds = profile.avoidedMovies.map(m => m.id);
+    try {
+      setLoading(true);
+      let movies: Movie[] = [];
       
-      movies = await getTagBasedRecommendations(
-        profile.tags,
-        likedMovieIds,
-        dislikedMovieIds,
-        avoidedMovieIds
-      );
-    } 
-    // Fallback to popular movies if no mood or tags
-    else {
-      movies = await getPopularMovies();
+      // If user has a current mood, prioritize mood-based recommendations
+      if (profile.currentMood) {
+        movies = await getMoodBasedRecommendations(profile.currentMood);
+      } 
+      // Otherwise use tag-based recommendations
+      else if (profile.tags && profile.tags.length > 0) {
+        const likedMovieIds = profile.likedMovies ? profile.likedMovies.map(m => m.id) : [];
+        const dislikedMovieIds = profile.dislikedMovies ? profile.dislikedMovies.map(m => m.id) : [];
+        const avoidedMovieIds = profile.avoidedMovies ? profile.avoidedMovies.map(m => m.id) : [];
+        
+        movies = await getTagBasedRecommendations(
+          profile.tags,
+          likedMovieIds,
+          dislikedMovieIds,
+          avoidedMovieIds
+        );
+      } 
+      // Fallback to popular movies if no mood or tags
+      else {
+        movies = await getPopularMovies();
+      }
+      
+      // Filter out movies the user has already liked, disliked or avoided
+      if (movies && movies.length > 0) {
+        const existingMovieIds = [
+          ...(profile.likedMovies || []).map(m => m.id),
+          ...(profile.dislikedMovies || []).map(m => m.id),
+          ...(profile.avoidedMovies || []).map(m => m.id)
+        ];
+        
+        const filteredMovies = movies.filter(movie => !existingMovieIds.includes(movie.id));
+        setRecommendations(filteredMovies);
+      } else {
+        setRecommendations([]);
+      }
+    } catch (error) {
+      console.error("Error fetching recommendations:", error);
+      toast.error("Failed to fetch recommendations. Please try again.");
+      setRecommendations([]);
+    } finally {
+      setLoading(false);
     }
-    
-    // Filter out movies the user has already liked, disliked or avoided
-    const existingMovieIds = [
-      ...profile.likedMovies.map(m => m.id),
-      ...profile.dislikedMovies.map(m => m.id),
-      ...profile.avoidedMovies.map(m => m.id)
-    ];
-    
-    const filteredMovies = movies.filter(movie => !existingMovieIds.includes(movie.id));
-    
-    setRecommendations(filteredMovies);
-    setLoading(false);
   };
   
   // Fetch recommendations on initial render or when profile changes
@@ -64,10 +75,10 @@ const Recommendations = () => {
     fetchRecommendations();
   }, [
     profile.currentMood, 
-    profile.tags.length, 
-    profile.likedMovies.length, 
-    profile.dislikedMovies.length,
-    profile.avoidedMovies.length
+    profile.tags?.length, 
+    profile.likedMovies?.length, 
+    profile.dislikedMovies?.length,
+    profile.avoidedMovies?.length
   ]);
   
   const handleChangeMood = () => {
@@ -131,7 +142,7 @@ const Recommendations = () => {
           )}
           
           {/* Tag info */}
-          {profile.tags.length > 0 && !profile.currentMood && (
+          {profile.tags && profile.tags.length > 0 && !profile.currentMood && (
             <Alert className="mb-6 bg-film-tag/50 border-film-primary/20">
               <div className="flex flex-wrap items-center gap-2">
                 <TagIcon className="h-4 w-4 text-film-primary" />
@@ -161,7 +172,7 @@ const Recommendations = () => {
           )}
           
           {/* Check if user has enough preferences */}
-          {profile.likedMovies.length === 0 && (
+          {(!profile.likedMovies || profile.likedMovies.length === 0) && (
             <Alert className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-900">
               <AlertDescription className="flex items-center">
                 <ThumbsUp className="h-4 w-4 mr-2 text-yellow-600 dark:text-yellow-400" />
