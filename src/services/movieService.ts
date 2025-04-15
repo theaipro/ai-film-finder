@@ -77,8 +77,15 @@ export const getMoviePosterUrl = (posterPath: string | null, size = 'w500'): str
   return `https://image.tmdb.org/t/p/${size}${posterPath}`;
 };
 
-// Function to extract tags from movies with improved confidence calculation
-export const extractTagsFromMovies = async (movies: Movie[]): Promise<{
+// Updated function to extract tags from movies with improved confidence calculation
+// Change the parameter to accept an object with likedMovies and dislikedMovies
+export const extractTagsFromMovies = async ({
+  likedMovies,
+  dislikedMovies = []
+}: {
+  likedMovies: Movie[];
+  dislikedMovies?: Movie[];
+}): Promise<{
   likedTags: Tag[], 
   confirmedTags: Tag[]
 }> => {
@@ -87,8 +94,10 @@ export const extractTagsFromMovies = async (movies: Movie[]): Promise<{
   
   // Collect all genre IDs from the movies and the movies that contain them
   const genreMap = new Map<number, Set<number>>();
+  const dislikedGenreMap = new Map<number, Set<number>>();
   
-  movies.forEach(movie => {
+  // Process liked movies
+  likedMovies.forEach(movie => {
     if (movie.genre_ids) {
       movie.genre_ids.forEach(genreId => {
         const movieIds = genreMap.get(genreId) || new Set<number>();
@@ -104,6 +113,23 @@ export const extractTagsFromMovies = async (movies: Movie[]): Promise<{
     }
   });
   
+  // Process disliked movies
+  dislikedMovies.forEach(movie => {
+    if (movie.genre_ids) {
+      movie.genre_ids.forEach(genreId => {
+        const movieIds = dislikedGenreMap.get(genreId) || new Set<number>();
+        movieIds.add(movie.id);
+        dislikedGenreMap.set(genreId, movieIds);
+      });
+    } else if (movie.genres) {
+      movie.genres.forEach(genre => {
+        const movieIds = dislikedGenreMap.get(genre.id) || new Set<number>();
+        movieIds.add(movie.id);
+        dislikedGenreMap.set(genre.id, movieIds);
+      });
+    }
+  });
+  
   // Create liked tags with occurrences and movie references
   const likedTags: Tag[] = Array.from(genreMap.entries())
     .sort((a, b) => b[1].size - a[1].size)
@@ -112,13 +138,20 @@ export const extractTagsFromMovies = async (movies: Movie[]): Promise<{
       const occurrences = movieIdsSet.size;
       const movieIds = Array.from(movieIdsSet);
       
+      // Count disliked occurrences for this genre
+      const dislikedMovieIdsSet = dislikedGenreMap.get(genreId) || new Set<number>();
+      const dislikedOccurrences = dislikedMovieIdsSet.size;
+      const dislikedMovieIds = Array.from(dislikedMovieIdsSet);
+      
       return {
         id: `genre-${genreId}`,
         name: genre?.name || 'Unknown Genre',
         source: 'auto',
         type: 'genre',
         occurrences,
-        movieIds
+        dislikedOccurrences,
+        movieIds,
+        dislikedMovieIds
       };
     });
   
@@ -126,10 +159,14 @@ export const extractTagsFromMovies = async (movies: Movie[]): Promise<{
   const totalTags = likedTags.length;
   const threshold = totalTags <= 50 ? 2 : Math.ceil(totalTags * 0.05);
   
-  // Filter confirmed tags based on threshold
-  const confirmedTags = likedTags.filter(tag => 
-    (tag.occurrences || 0) >= threshold
-  ).map(tag => ({...tag, confirmed: true}));
+  // Filter confirmed tags based on threshold and net score
+  const confirmedTags = likedTags
+    // Only confirm tags where occurrences - (dislikedOccurrences * 2) is positive
+    .filter(tag => {
+      const netScore = (tag.occurrences || 0) - ((tag.dislikedOccurrences || 0) * 2);
+      return netScore > 0 && (tag.occurrences || 0) >= threshold;
+    })
+    .map(tag => ({...tag, confirmed: true}));
   
   // TODO: In the future, we could add more tag types like:
   // - Keywords from TMDB
