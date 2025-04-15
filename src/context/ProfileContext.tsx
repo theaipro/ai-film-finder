@@ -65,8 +65,14 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Function to handle updating tags when movies are added/removed
   const updateTagsFromMovies = async () => {
     try {
+      // Fix here: Make sure we're passing parameters according to the function signature
+      // The error indicates extractTagsFromMovies expects only 1 argument, so we need to pass
+      // an object that contains both likedMovies and dislikedMovies
       const { likedTags: newLikedTags, confirmedTags: newConfirmedTags } = 
-        await extractTagsFromMovies(profile.likedMovies, profile.dislikedMovies);
+        await extractTagsFromMovies({
+          likedMovies: profile.likedMovies,
+          dislikedMovies: profile.dislikedMovies
+        });
       
       // Update tags with net scores (liked - disliked*2)
       const processedLikedTags = newLikedTags.map(tag => {
