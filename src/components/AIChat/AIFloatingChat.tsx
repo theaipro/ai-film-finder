@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useProfile } from '@/context/ProfileContext';
 import { geminiService, GeminiService } from '@/services/geminiService';
@@ -37,17 +36,17 @@ const AIFloatingChat = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const { profile } = useProfile();
 
-  // Initialize Gemini service with saved API key if available
   useEffect(() => {
     const savedApiKey = localStorage.getItem('gemini_api_key');
     if (savedApiKey) {
       setApiKeySet(true);
       setGeminiInstance(new GeminiService(savedApiKey));
+    } else {
+      setApiKeySet(true);
     }
   }, []);
 
   useEffect(() => {
-    // Scroll to bottom when messages change
     if (scrollAreaRef.current) {
       const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
       if (scrollContainer) {
@@ -57,31 +56,20 @@ const AIFloatingChat = () => {
   }, [messages]);
 
   useEffect(() => {
-    // Focus input when chat opens
     if (isOpen && inputRef.current) {
       inputRef.current.focus();
     }
   }, [isOpen]);
 
   useEffect(() => {
-    // Check if API key is set when opening chat
-    if (isOpen && !apiKeySet) {
-      setIsConfigOpen(true);
-    }
-  }, [isOpen, apiKeySet]);
+    setApiKeySet(true);
+  }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!inputValue.trim()) return;
     
-    // Check if API key is set
-    if (!apiKeySet) {
-      setIsConfigOpen(true);
-      return;
-    }
-    
-    // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
       content: inputValue,
@@ -94,17 +82,14 @@ const AIFloatingChat = () => {
     setIsLoading(true);
     
     try {
-      // Use the configured Gemini instance or fallback to the default
       const service = geminiInstance || geminiService;
       
-      // Get AI response using the Gemini service
       const response = await service.generateResponse(
         inputValue,
         profile,
         [...(profile?.likedMovies || []), ...(profile?.dislikedMovies || [])].slice(0, 5)
       );
       
-      // Add AI response
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: response,
@@ -147,7 +132,6 @@ const AIFloatingChat = () => {
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end">
-      {/* Chat bubble button */}
       {!isOpen && (
         <Button 
           onClick={toggleChat} 
@@ -158,7 +142,6 @@ const AIFloatingChat = () => {
         </Button>
       )}
       
-      {/* Chat window */}
       {isOpen && (
         <div 
           className={`bg-background border rounded-lg shadow-xl flex flex-col ${
@@ -167,7 +150,6 @@ const AIFloatingChat = () => {
               : 'w-[350px] md:w-[400px] h-[500px]'
           }`}
         >
-          {/* Chat header */}
           <div className="flex items-center justify-between p-3 border-b">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 text-primary" />
@@ -186,7 +168,6 @@ const AIFloatingChat = () => {
             </div>
           </div>
           
-          {/* Chat messages */}
           <ScrollArea className="flex-1 p-3" ref={scrollAreaRef}>
             <div className="flex flex-col gap-3">
               {messages.map((message) => (
@@ -204,21 +185,20 @@ const AIFloatingChat = () => {
             </div>
           </ScrollArea>
           
-          {/* Chat input */}
           <form onSubmit={handleSubmit} className="border-t p-3">
             <div className="flex gap-2">
               <Input
                 ref={inputRef}
                 value={inputValue}
                 onChange={e => setInputValue(e.target.value)}
-                placeholder={apiKeySet ? "Ask about movies..." : "Set API key first..."}
-                disabled={isLoading || !apiKeySet}
+                placeholder="Ask about movies..."
+                disabled={isLoading}
                 className="flex-1"
               />
               <Button 
                 type="submit" 
                 size="icon" 
-                disabled={isLoading || !inputValue.trim() || !apiKeySet}
+                disabled={isLoading || !inputValue.trim()}
               >
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -228,19 +208,7 @@ const AIFloatingChat = () => {
               </Button>
             </div>
             
-            {/* Chat actions */}
             <div className="flex justify-between mt-2">
-              {!apiKeySet && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsConfigOpen(true)}
-                  className="text-xs"
-                >
-                  Set API Key
-                </Button>
-              )}
               <div className="ml-auto">
                 <Button
                   type="button"
@@ -257,7 +225,6 @@ const AIFloatingChat = () => {
         </div>
       )}
       
-      {/* Configuration dialog */}
       <AIChatConfig
         isOpen={isConfigOpen}
         onClose={() => setIsConfigOpen(false)}
