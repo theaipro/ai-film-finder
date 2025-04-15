@@ -1,4 +1,3 @@
-
 export interface Movie {
   id: number;
   title: string;
@@ -15,11 +14,23 @@ export interface Genre {
   name: string;
 }
 
+export type TagType = 
+  | 'genre' 
+  | 'theme'
+  | 'protagonist'
+  | 'storytelling'
+  | 'cinematic'
+  | 'ending'
+  | 'tone'
+  | 'length'
+  | 'era'
+  | 'custom';
+
 export interface Tag {
   id: string;
   name: string;
   source: 'auto' | 'manual';
-  type: 'genre' | 'theme' | 'tone' | 'custom';
+  type: TagType;
 }
 
 export type Mood = 'happy' | 'sad' | 'excited' | 'relaxed' | 'thoughtful' | 'tense';
@@ -27,7 +38,11 @@ export type Mood = 'happy' | 'sad' | 'excited' | 'relaxed' | 'thoughtful' | 'ten
 export interface UserProfile {
   likedMovies: Movie[];
   dislikedMovies: Movie[];
-  avoidedMovies: Movie[];  // Added avoided movies
+  avoidedMovies: Movie[];  
+  watchLaterMovies: Movie[]; // Added watch later
   tags: Tag[];
   currentMood?: Mood;
+  name?: string;           // Added for profile info
+  bio?: string;           // Added for profile info
+  favoriteGenres?: string[]; // Added for profile info
 }

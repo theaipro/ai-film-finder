@@ -1,9 +1,8 @@
-
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ThumbsUp, ThumbsDown, Star, CalendarDays } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, CalendarDays, Clock } from 'lucide-react';
 import { Movie } from '@/types';
 import { getMoviePosterUrl } from '@/services/movieService';
 import { useProfile } from '@/context/ProfileContext';
@@ -16,13 +15,22 @@ interface MovieDetailDialogProps {
 }
 
 const MovieDetailDialog: React.FC<MovieDetailDialogProps> = ({ movie, open, onOpenChange }) => {
-  const { profile, addLikedMovie, addDislikedMovie, removeLikedMovie, removeDislikedMovie } = useProfile();
+  const { 
+    profile, 
+    addLikedMovie, 
+    addDislikedMovie, 
+    addWatchLaterMovie,
+    removeLikedMovie, 
+    removeDislikedMovie,
+    removeWatchLaterMovie 
+  } = useProfile();
   
   if (!movie) return null;
   
   // Add null checks for all arrays
   const isLiked = profile.likedMovies?.some(m => m.id === movie.id) || false;
   const isDisliked = profile.dislikedMovies?.some(m => m.id === movie.id) || false;
+  const isWatchLater = profile.watchLaterMovies?.some(m => m.id === movie.id) || false;
   
   const handleLike = () => {
     if (isLiked) {
@@ -37,6 +45,14 @@ const MovieDetailDialog: React.FC<MovieDetailDialogProps> = ({ movie, open, onOp
       removeDislikedMovie(movie.id);
     } else {
       addDislikedMovie(movie);
+    }
+  };
+
+  const handleWatchLater = () => {
+    if (isWatchLater) {
+      removeWatchLaterMovie(movie.id);
+    } else {
+      addWatchLaterMovie(movie);
     }
   };
   
@@ -105,6 +121,17 @@ const MovieDetailDialog: React.FC<MovieDetailDialogProps> = ({ movie, open, onOp
               >
                 <ThumbsDown className="h-4 w-4 mr-2" />
                 {isDisliked ? "Disliked" : "Dislike"}
+              </Button>
+
+              <Button 
+                onClick={handleWatchLater}
+                variant={isWatchLater ? "default" : "outline"}
+                className={cn(
+                  isWatchLater && "bg-blue-600 hover:bg-blue-700"
+                )}
+              >
+                <Clock className="h-4 w-4 mr-2" />
+                {isWatchLater ? "Added to Watch Later" : "Watch Later"}
               </Button>
               
               <Button 

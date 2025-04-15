@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { Movie } from '@/types';
 import { getMoviePosterUrl } from '@/services/movieService';
-import { ThumbsUp, ThumbsDown, Star, Info, X } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, Info, X, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProfile } from '@/context/ProfileContext';
 import { cn } from '@/lib/utils';
@@ -26,15 +25,18 @@ const MovieCard: React.FC<MovieCardProps> = ({
     addLikedMovie, 
     addDislikedMovie, 
     addAvoidedMovie,
+    addWatchLaterMovie,
     removeLikedMovie, 
     removeDislikedMovie,
-    removeAvoidedMovie
+    removeAvoidedMovie,
+    removeWatchLaterMovie
   } = useProfile();
   
   // Add null checks for all arrays
   const isLiked = profile.likedMovies?.some(m => m.id === movie.id) || false;
   const isDisliked = profile.dislikedMovies?.some(m => m.id === movie.id) || false;
   const isAvoided = profile.avoidedMovies?.some(m => m.id === movie.id) || false;
+  const isWatchLater = profile.watchLaterMovies?.some(m => m.id === movie.id) || false;
   
   const handleLike = () => {
     if (isLiked) {
@@ -57,6 +59,14 @@ const MovieCard: React.FC<MovieCardProps> = ({
       removeAvoidedMovie(movie.id);
     } else {
       addAvoidedMovie(movie);
+    }
+  };
+
+  const handleWatchLater = () => {
+    if (isWatchLater) {
+      removeWatchLaterMovie(movie.id);
+    } else {
+      addWatchLaterMovie(movie);
     }
   };
 
@@ -129,6 +139,16 @@ const MovieCard: React.FC<MovieCardProps> = ({
                   title="Avoid"
                 >
                   <X className={cn("h-5 w-5", isAvoided && "fill-orange-600")} />
+                </Button>
+
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleWatchLater}
+                  className={cn(isWatchLater && "text-blue-600")}
+                  title="Watch Later"
+                >
+                  <Clock className={cn("h-5 w-5", isWatchLater && "fill-blue-600")} />
                 </Button>
               </div>
               
