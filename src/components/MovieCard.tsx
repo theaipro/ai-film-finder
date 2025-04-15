@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Movie } from '@/types';
 import { getMoviePosterUrl } from '@/services/movieService';
@@ -6,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useProfile } from '@/context/ProfileContext';
 import { cn } from '@/lib/utils';
 import MovieDetailDialog from './MovieDetailDialog';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface MovieCardProps {
   movie: Movie;
@@ -19,6 +21,7 @@ const MovieCard: React.FC<MovieCardProps> = ({
   onViewDetails
 }) => {
   const [showDetails, setShowDetails] = useState(false);
+  const isMobile = useIsMobile();
   
   const { 
     profile, 
@@ -79,7 +82,7 @@ const MovieCard: React.FC<MovieCardProps> = ({
   
   return (
     <>
-      <div className="rounded-lg overflow-hidden shadow-md bg-white dark:bg-film-dark border border-border hover:shadow-lg transition-shadow">
+      <div className="rounded-lg overflow-hidden shadow-md bg-white dark:bg-film-dark border border-border hover:shadow-lg transition-shadow h-full flex flex-col">
         <div className="relative aspect-[2/3] overflow-hidden bg-muted cursor-pointer" onClick={handleViewDetails}>
           <img 
             src={getMoviePosterUrl(movie.poster_path)} 
@@ -97,62 +100,67 @@ const MovieCard: React.FC<MovieCardProps> = ({
           </div>
         </div>
         
-        <div className="p-4">
-          <h3 className="font-semibold mb-1 line-clamp-1 cursor-pointer hover:text-film-primary" onClick={handleViewDetails}>
+        <div className="p-3 sm:p-4 flex-1 flex flex-col">
+          <h3 className="font-semibold mb-1 line-clamp-1 cursor-pointer hover:text-film-primary text-sm sm:text-base" onClick={handleViewDetails}>
             {movie.title}
           </h3>
-          <p className="text-xs text-muted-foreground mb-3">
+          <p className="text-xs text-muted-foreground mb-2">
             {movie.release_date ? new Date(movie.release_date).getFullYear() : 'Unknown year'}
           </p>
           
-          <p className="text-sm line-clamp-2 h-10 mb-3">{movie.overview || 'No description available.'}</p>
+          <p className="text-xs sm:text-sm line-clamp-2 mb-3 flex-grow">{movie.overview || 'No description available.'}</p>
           
           {showActions && (
-            <div className="flex items-center justify-between mt-2">
-              <div className="flex space-x-2">
+            <div className="flex items-center justify-between mt-auto">
+              <div className={`flex ${isMobile ? 'space-x-1' : 'space-x-2'}`}>
                 <Button 
                   variant="ghost" 
-                  size="icon" 
+                  size={isMobile ? "sm" : "icon"} 
                   onClick={handleLike}
-                  className={cn(isLiked && "text-green-600")}
+                  className={cn(isLiked && "text-green-600", isMobile && "p-1 h-auto")}
                   title="Like"
                 >
-                  <ThumbsUp className={cn("h-5 w-5", isLiked && "fill-green-600")} />
+                  <ThumbsUp className={cn("h-4 w-4 sm:h-5 sm:w-5", isLiked && "fill-green-600")} />
                 </Button>
                 
                 <Button 
                   variant="ghost" 
-                  size="icon" 
+                  size={isMobile ? "sm" : "icon"} 
                   onClick={handleDislike}
-                  className={cn(isDisliked && "text-red-600")}
+                  className={cn(isDisliked && "text-red-600", isMobile && "p-1 h-auto")}
                   title="Dislike"
                 >
-                  <ThumbsDown className={cn("h-5 w-5", isDisliked && "fill-red-600")} />
+                  <ThumbsDown className={cn("h-4 w-4 sm:h-5 sm:w-5", isDisliked && "fill-red-600")} />
                 </Button>
 
                 <Button 
                   variant="ghost" 
-                  size="icon" 
+                  size={isMobile ? "sm" : "icon"} 
                   onClick={handleAvoid}
-                  className={cn(isAvoided && "text-orange-600")}
+                  className={cn(isAvoided && "text-orange-600", isMobile && "p-1 h-auto")}
                   title="Avoid"
                 >
-                  <X className={cn("h-5 w-5", isAvoided && "fill-orange-600")} />
+                  <X className={cn("h-4 w-4 sm:h-5 sm:w-5", isAvoided && "fill-orange-600")} />
                 </Button>
 
                 <Button 
                   variant="ghost" 
-                  size="icon" 
+                  size={isMobile ? "sm" : "icon"} 
                   onClick={handleWatchLater}
-                  className={cn(isWatchLater && "text-blue-600")}
+                  className={cn(isWatchLater && "text-blue-600", isMobile && "p-1 h-auto")}
                   title="Watch Later"
                 >
-                  <Clock className={cn("h-5 w-5", isWatchLater && "fill-blue-600")} />
+                  <Clock className={cn("h-4 w-4 sm:h-5 sm:w-5", isWatchLater && "fill-blue-600")} />
                 </Button>
               </div>
               
-              <Button variant="outline" size="sm" onClick={handleViewDetails}>
-                <Info className="h-4 w-4 mr-1" />
+              <Button 
+                variant="outline" 
+                size={isMobile ? "sm" : "sm"} 
+                onClick={handleViewDetails}
+                className={isMobile ? "text-xs px-2 py-1 h-auto" : ""}
+              >
+                <Info className={`${isMobile ? 'h-3 w-3' : 'h-4 w-4'} mr-1`} />
                 Details
               </Button>
             </div>
