@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Movie } from '@/types';
 import { getMoviePosterUrl } from '@/services/movieService';
-import { ThumbsUp, ThumbsDown, Star, Info } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, Info, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProfile } from '@/context/ProfileContext';
 import { cn } from '@/lib/utils';
@@ -25,12 +25,15 @@ const MovieCard: React.FC<MovieCardProps> = ({
     profile, 
     addLikedMovie, 
     addDislikedMovie, 
+    addAvoidedMovie,
     removeLikedMovie, 
-    removeDislikedMovie 
+    removeDislikedMovie,
+    removeAvoidedMovie
   } = useProfile();
   
   const isLiked = profile.likedMovies.some(m => m.id === movie.id);
   const isDisliked = profile.dislikedMovies.some(m => m.id === movie.id);
+  const isAvoided = profile.avoidedMovies.some(m => m.id === movie.id);
   
   const handleLike = () => {
     if (isLiked) {
@@ -45,6 +48,14 @@ const MovieCard: React.FC<MovieCardProps> = ({
       removeDislikedMovie(movie.id);
     } else {
       addDislikedMovie(movie);
+    }
+  };
+
+  const handleAvoid = () => {
+    if (isAvoided) {
+      removeAvoidedMovie(movie.id);
+    } else {
+      addAvoidedMovie(movie);
     }
   };
 
@@ -94,6 +105,7 @@ const MovieCard: React.FC<MovieCardProps> = ({
                   size="icon" 
                   onClick={handleLike}
                   className={cn(isLiked && "text-green-600")}
+                  title="Like"
                 >
                   <ThumbsUp className={cn("h-5 w-5", isLiked && "fill-green-600")} />
                 </Button>
@@ -103,8 +115,19 @@ const MovieCard: React.FC<MovieCardProps> = ({
                   size="icon" 
                   onClick={handleDislike}
                   className={cn(isDisliked && "text-red-600")}
+                  title="Dislike"
                 >
                   <ThumbsDown className={cn("h-5 w-5", isDisliked && "fill-red-600")} />
+                </Button>
+
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleAvoid}
+                  className={cn(isAvoided && "text-orange-600")}
+                  title="Avoid"
+                >
+                  <X className={cn("h-5 w-5", isAvoided && "fill-orange-600")} />
                 </Button>
               </div>
               

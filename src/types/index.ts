@@ -27,6 +27,7 @@ export type Mood = 'happy' | 'sad' | 'excited' | 'relaxed' | 'thoughtful' | 'ten
 export interface UserProfile {
   likedMovies: Movie[];
   dislikedMovies: Movie[];
+  avoidedMovies: Movie[];  // Added avoided movies
   tags: Tag[];
   currentMood?: Mood;
 }

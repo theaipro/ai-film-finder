@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Movie, Tag, Mood, UserProfile } from '@/types';
 
@@ -8,6 +7,8 @@ interface ProfileContextType {
   removeLikedMovie: (movieId: number) => void;
   addDislikedMovie: (movie: Movie) => void;
   removeDislikedMovie: (movieId: number) => void;
+  addAvoidedMovie: (movie: Movie) => void;  // Added
+  removeAvoidedMovie: (movieId: number) => void;  // Added
   addTag: (tag: Tag) => void;
   removeTag: (tagId: string) => void;
   setCurrentMood: (mood: Mood) => void;
@@ -17,6 +18,7 @@ interface ProfileContextType {
 const initialProfile: UserProfile = {
   likedMovies: [],
   dislikedMovies: [],
+  avoidedMovies: [],  // Added
   tags: [],
   currentMood: undefined,
 };
@@ -37,8 +39,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const addLikedMovie = (movie: Movie) => {
     setProfile(prev => {
-      // Remove from disliked if it was there
+      // Remove from disliked and avoided if it was there
       const filteredDisliked = prev.dislikedMovies.filter(m => m.id !== movie.id);
+      const filteredAvoided = prev.avoidedMovies.filter(m => m.id !== movie.id);
       
       // Check if already in liked movies
       const isAlreadyLiked = prev.likedMovies.some(m => m.id === movie.id);
@@ -48,7 +51,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return {
         ...prev,
         likedMovies: [...prev.likedMovies, movie],
-        dislikedMovies: filteredDisliked
+        dislikedMovies: filteredDisliked,
+        avoidedMovies: filteredAvoided
       };
     });
   };
@@ -62,8 +66,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const addDislikedMovie = (movie: Movie) => {
     setProfile(prev => {
-      // Remove from liked if it was there
+      // Remove from liked and avoided if it was there
       const filteredLiked = prev.likedMovies.filter(m => m.id !== movie.id);
+      const filteredAvoided = prev.avoidedMovies.filter(m => m.id !== movie.id);
       
       // Check if already in disliked movies
       const isAlreadyDisliked = prev.dislikedMovies.some(m => m.id === movie.id);
@@ -73,7 +78,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return {
         ...prev,
         dislikedMovies: [...prev.dislikedMovies, movie],
-        likedMovies: filteredLiked
+        likedMovies: filteredLiked,
+        avoidedMovies: filteredAvoided
       };
     });
   };
@@ -82,6 +88,33 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setProfile(prev => ({
       ...prev,
       dislikedMovies: prev.dislikedMovies.filter(m => m.id !== movieId)
+    }));
+  };
+
+  const addAvoidedMovie = (movie: Movie) => {
+    setProfile(prev => {
+      // Remove from liked and disliked if it was there
+      const filteredLiked = prev.likedMovies.filter(m => m.id !== movie.id);
+      const filteredDisliked = prev.dislikedMovies.filter(m => m.id !== movie.id);
+      
+      // Check if already in avoided movies
+      const isAlreadyAvoided = prev.avoidedMovies.some(m => m.id === movie.id);
+      
+      if (isAlreadyAvoided) return prev;
+      
+      return {
+        ...prev,
+        avoidedMovies: [...prev.avoidedMovies, movie],
+        likedMovies: filteredLiked,
+        dislikedMovies: filteredDisliked
+      };
+    });
+  };
+
+  const removeAvoidedMovie = (movieId: number) => {
+    setProfile(prev => ({
+      ...prev,
+      avoidedMovies: prev.avoidedMovies.filter(m => m.id !== movieId)
     }));
   };
 
@@ -123,6 +156,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
       removeLikedMovie,
       addDislikedMovie,
       removeDislikedMovie,
+      addAvoidedMovie,
+      removeAvoidedMovie,
       addTag,
       removeTag,
       setCurrentMood,

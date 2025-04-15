@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { Movie, Genre, Tag, Mood } from '@/types';
 
@@ -166,6 +165,7 @@ export const getTagBasedRecommendations = async (
   tags: Tag[],
   likedMovieIds: number[],
   dislikedMovieIds: number[],
+  avoidedMovieIds: number[] = [], // Added avoided movie IDs parameter
   page = 1
 ): Promise<Movie[]> => {
   try {
@@ -194,9 +194,12 @@ export const getTagBasedRecommendations = async (
     const response = await api.get('/discover/movie', { params });
     let results = response.data.results;
     
-    // Filter out disliked movies
-    if (dislikedMovieIds.length > 0) {
-      results = results.filter(movie => !dislikedMovieIds.includes(movie.id));
+    // Filter out disliked and avoided movies
+    if (dislikedMovieIds.length > 0 || avoidedMovieIds.length > 0) {
+      results = results.filter(movie => 
+        !dislikedMovieIds.includes(movie.id) && 
+        !avoidedMovieIds.includes(movie.id)
+      );
     }
     
     return results;

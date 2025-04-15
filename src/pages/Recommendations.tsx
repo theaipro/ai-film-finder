@@ -32,11 +32,13 @@ const Recommendations = () => {
     else if (profile.tags.length > 0) {
       const likedMovieIds = profile.likedMovies.map(m => m.id);
       const dislikedMovieIds = profile.dislikedMovies.map(m => m.id);
+      const avoidedMovieIds = profile.avoidedMovies.map(m => m.id);
       
       movies = await getTagBasedRecommendations(
         profile.tags,
         likedMovieIds,
-        dislikedMovieIds
+        dislikedMovieIds,
+        avoidedMovieIds
       );
     } 
     // Fallback to popular movies if no mood or tags
@@ -44,10 +46,11 @@ const Recommendations = () => {
       movies = await getPopularMovies();
     }
     
-    // Filter out movies the user has already liked or disliked
+    // Filter out movies the user has already liked, disliked or avoided
     const existingMovieIds = [
       ...profile.likedMovies.map(m => m.id),
-      ...profile.dislikedMovies.map(m => m.id)
+      ...profile.dislikedMovies.map(m => m.id),
+      ...profile.avoidedMovies.map(m => m.id)
     ];
     
     const filteredMovies = movies.filter(movie => !existingMovieIds.includes(movie.id));
@@ -59,7 +62,13 @@ const Recommendations = () => {
   // Fetch recommendations on initial render or when profile changes
   useEffect(() => {
     fetchRecommendations();
-  }, [profile.currentMood, profile.tags.length, profile.likedMovies.length, profile.dislikedMovies.length]);
+  }, [
+    profile.currentMood, 
+    profile.tags.length, 
+    profile.likedMovies.length, 
+    profile.dislikedMovies.length,
+    profile.avoidedMovies.length
+  ]);
   
   const handleChangeMood = () => {
     setShowMoodSelector(!showMoodSelector);
