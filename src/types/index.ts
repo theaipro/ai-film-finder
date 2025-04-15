@@ -8,6 +8,7 @@ export interface Movie {
   vote_average: number;
   genres?: Genre[];
   genre_ids?: number[];
+  likabilityPercentage?: number; // Add the likabilityPercentage property
 }
 
 export interface Genre {
