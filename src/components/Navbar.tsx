@@ -1,9 +1,10 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Film, User, Home } from 'lucide-react';
+import { Film, Home } from 'lucide-react';
 import { useProfile } from '@/context/ProfileContext';
 import ThemeToggle from './ThemeToggle';
+import ProfileIcon from './ProfileIcon';
 
 const Navbar = () => {
   const { profile } = useProfile();
@@ -25,13 +26,15 @@ const Navbar = () => {
           
           <Link 
             to={hasProfile ? "/recommendations" : "/profile"} 
-            className="flex items-center space-x-1 hover:text-film-primary transition-colors"
+            className="hidden sm:flex items-center space-x-1 hover:text-film-primary transition-colors"
           >
-            <User className="h-5 w-5" />
+            <Film className="h-5 w-5" />
             <span>{hasProfile ? "Recommendations" : "Create Profile"}</span>
           </Link>
           
           <ThemeToggle />
+          
+          <ProfileIcon />
         </div>
       </div>
     </nav>

@@ -67,3 +67,11 @@ export const getMoviesKeywords = async (movies: Movie[]): Promise<Record<number,
   
   return keywordMap;
 };
+
+/**
+ * Calculate the net score for a tag based on liked and disliked occurrences
+ * Disliked tags are weighted twice as heavy as liked tags
+ */
+export const calculateTagNetScore = (occurrences: number = 0, dislikedOccurrences: number = 0): number => {
+  return occurrences - (dislikedOccurrences * 2);
+};

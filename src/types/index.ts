@@ -1,3 +1,4 @@
+
 export interface Movie {
   id: number;
   title: string;
@@ -32,9 +33,12 @@ export interface Tag {
   source: 'auto' | 'manual';
   type: TagType;
   occurrences?: number;    // Number of times this tag appears in liked movies
+  dislikedOccurrences?: number; // Number of times this tag appears in disliked movies
+  netScore?: number;       // Weighted score (occurrences - dislikedOccurrences * 2)
   confirmed?: boolean;     // Whether this is a confirmed tag based on threshold
   override?: boolean;      // Whether the user has manually overridden the tag status
   movieIds?: number[];     // IDs of movies that contributed to this tag
+  dislikedMovieIds?: number[]; // IDs of disliked movies that contributed to this tag
 }
 
 export type TagStatus = 'liked' | 'confirmed' | 'avoided';

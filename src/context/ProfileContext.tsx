@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Movie, Tag, Mood, UserProfile } from '@/types';
 import { extractTagsFromMovies } from '@/services/movieService';
+import { calculateTagNetScore } from '@/services/keywordService';
 
 interface ProfileContextType {
   profile: UserProfile;
@@ -61,6 +62,39 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem('userProfile', JSON.stringify(profile));
   }, [profile]);
 
+  // Function to handle updating tags when movies are added/removed
+  const updateTagsFromMovies = async () => {
+    try {
+      const { likedTags: newLikedTags, confirmedTags: newConfirmedTags } = 
+        await extractTagsFromMovies(profile.likedMovies, profile.dislikedMovies);
+      
+      // Update tags with net scores (liked - disliked*2)
+      const processedLikedTags = newLikedTags.map(tag => {
+        const netScore = calculateTagNetScore(tag.occurrences, tag.dislikedOccurrences);
+        return { ...tag, netScore };
+      });
+      
+      const processedConfirmedTags = newConfirmedTags.map(tag => {
+        const netScore = calculateTagNetScore(tag.occurrences, tag.dislikedOccurrences);
+        return { ...tag, netScore };
+      });
+      
+      // Preserve user overrides
+      const updatedConfirmedTags = processedConfirmedTags.map(tag => ({
+        ...tag,
+        override: profile.confirmedTags.some(t => t.id === tag.id && t.override) || false
+      }));
+      
+      setProfile(current => ({
+        ...current,
+        likedTags: processedLikedTags,
+        confirmedTags: updatedConfirmedTags
+      }));
+    } catch (error) {
+      console.error("Error updating tags from movies:", error);
+    }
+  };
+
   const addLikedMovie = (movie: Movie) => {
     setProfile(prev => {
       // Remove from disliked and avoided if it was there
@@ -73,29 +107,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       if (isAlreadyLiked) return prev;
       
-      // Schedule tag extraction from the new movie collection
-      setTimeout(async () => {
-        try {
-          // When adding a new liked movie, we want to automatically extract and update tags
-          const updatedMovies = [...prev.likedMovies, movie];
-          const { likedTags, confirmedTags } = await extractTagsFromMovies(updatedMovies);
-          
-          // Update the profile with the new tags
-          setProfile(current => ({
-            ...current,
-            likedTags,
-            confirmedTags: confirmedTags.map(tag => ({
-              ...tag,
-              // Preserve user overrides
-              override: current.confirmedTags.some(
-                t => t.id === tag.id && t.override
-              ) || false
-            }))
-          }));
-        } catch (error) {
-          console.error("Error updating tags after adding movie:", error);
-        }
-      }, 0);
+      // Schedule tag extraction with the updated movie collection
+      setTimeout(() => updateTagsFromMovies(), 0);
       
       return {
         ...prev,
@@ -111,36 +124,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setProfile(prev => {
       const updatedLikedMovies = prev.likedMovies.filter(m => m.id !== movieId);
       
-      // Schedule tag extraction from the updated movie collection
-      setTimeout(async () => {
-        try {
-          if (updatedLikedMovies.length > 0) {
-            const { likedTags, confirmedTags } = await extractTagsFromMovies(updatedLikedMovies);
-            
-            // Update the profile with the recalculated tags
-            setProfile(current => ({
-              ...current,
-              likedTags,
-              confirmedTags: confirmedTags.map(tag => ({
-                ...tag,
-                // Preserve user overrides
-                override: current.confirmedTags.some(
-                  t => t.id === tag.id && t.override
-                ) || false
-              }))
-            }));
-          } else {
-            // If no liked movies remain, clear out tags (except manually overridden ones)
-            setProfile(current => ({
-              ...current,
-              likedTags: [],
-              confirmedTags: current.confirmedTags.filter(tag => tag.override)
-            }));
-          }
-        } catch (error) {
-          console.error("Error updating tags after removing movie:", error);
-        }
-      }, 0);
+      // Schedule tag extraction with the updated movie collection
+      setTimeout(() => updateTagsFromMovies(), 0);
       
       return {
         ...prev,
@@ -161,6 +146,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       if (isAlreadyDisliked) return prev;
       
+      // Schedule tag extraction with the updated movie collection
+      setTimeout(() => updateTagsFromMovies(), 0);
+      
       return {
         ...prev,
         dislikedMovies: [...prev.dislikedMovies, movie],
@@ -172,10 +160,17 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const removeDislikedMovie = (movieId: number) => {
-    setProfile(prev => ({
-      ...prev,
-      dislikedMovies: prev.dislikedMovies.filter(m => m.id !== movieId)
-    }));
+    setProfile(prev => {
+      const updatedDislikedMovies = prev.dislikedMovies.filter(m => m.id !== movieId);
+      
+      // Schedule tag extraction with the updated movie collection
+      setTimeout(() => updateTagsFromMovies(), 0);
+      
+      return {
+        ...prev,
+        dislikedMovies: updatedDislikedMovies
+      };
+    });
   };
 
   const addAvoidedMovie = (movie: Movie) => {
@@ -226,14 +221,21 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }));
   };
 
-  // Function to calculate if a tag should be confirmed based on threshold
-  const shouldBeConfirmed = (occurrences: number, totalLikedTags: number): boolean => {
+  // Function to calculate if a tag should be confirmed based on threshold and net score
+  const shouldBeConfirmed = (tag: Tag, totalLikedTags: number): boolean => {
+    // Calculate the net score if not already done
+    const netScore = tag.netScore ?? calculateTagNetScore(tag.occurrences, tag.dislikedOccurrences);
+    
+    // If net score is negative, don't confirm the tag
+    if (netScore <= 0) return false;
+    
+    // Apply threshold logic based on total liked tags
     if (totalLikedTags <= 50) {
-      return occurrences >= 2;
+      return netScore >= 2;
     } else {
       // Calculate 5% threshold (rounded up)
       const threshold = Math.ceil(totalLikedTags * 0.05);
-      return occurrences >= threshold;
+      return netScore >= threshold;
     }
   };
   
@@ -252,8 +254,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       // Then, process liked tags to see if they should be promoted
       prev.likedTags.forEach(tag => {
-        if (tag.occurrences && 
-           (shouldBeConfirmed(tag.occurrences, totalLikedTags) || tag.override)) {
+        if (shouldBeConfirmed(tag, totalLikedTags) || tag.override) {
           confirmedMap.set(tag.id, {...tag, confirmed: true});
         }
       });
