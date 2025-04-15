@@ -43,7 +43,7 @@ const TagQuestions: React.FC<TagQuestionProps> = ({
     }
     acc[tag.type].push(tag);
     return acc;
-  }, {} as Record<string, Tag[]>);
+  }, {} as Record<string, TagType[]>);
 
   // Get the tag type labels for display
   const tagTypeLabels = {

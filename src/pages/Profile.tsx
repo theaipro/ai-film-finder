@@ -24,7 +24,7 @@ const Profile = () => {
   const [loading, setLoading] = useState(false);
   const [searchPerformed, setSearchPerformed] = useState(false);
   const [showTagQuestions, setShowTagQuestions] = useState(false);
-  const [suggestedTags, setSuggestedTags] = useState<Tag[]>([]);
+  const [suggestedTags, setSuggestedTags] = useState<TagType[]>([]);
   const isMobile = useIsMobile();
   
   // Load popular movies on initial render
@@ -94,7 +94,7 @@ const Profile = () => {
     }
   };
   
-  const handleSaveTags = (selectedTags: Tag[]) => {
+  const handleSaveTags = (selectedTags: TagType[]) => {
     // First remove any existing tags
     profile.tags.forEach(tag => removeTag(tag.id));
     

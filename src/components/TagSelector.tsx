@@ -22,7 +22,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
 }) => {
   const { promoteTagToConfirmed, demoteTagFromConfirmed } = useProfile();
   const [newTagName, setNewTagName] = useState('');
-  const [categorizedTags, setCategorizedTags] = useState<Record<string, Tag[][]>>({});
+  const [categorizedTags, setCategorizedTags] = useState<Record<string, TagType[][]>>({});
 
   // Categorize tags when they change
   useEffect(() => {
@@ -36,7 +36,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
 
   const handleAddTag = () => {
     if (newTagName.trim()) {
-      const newTag: Tag = {
+      const newTag: TagType = {
         id: `custom-${Date.now()}`,
         name: newTagName.trim(),
         source: 'manual',
@@ -66,7 +66,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
     }
   };
 
-  const getTagColor = (tag: Tag) => {
+  const getTagColor = (tag: TagType) => {
     // Priority 1: Check if this is a confirmed tag (stronger color)
     if (tag.confirmed) {
       switch (tag.type) {
@@ -103,7 +103,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
   };
 
   // Get weight indicator
-  const getTagWeight = (tag: Tag) => {
+  const getTagWeight = (tag: TagType) => {
     // Confirmed tags have double weight
     if (tag.confirmed) {
       return 2 * (tag.occurrences || 1);

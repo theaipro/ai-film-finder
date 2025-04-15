@@ -33,12 +33,12 @@ const Recommendations = () => {
   const [recommendations, setRecommendations] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(false);
   const [showMoodSelector, setShowMoodSelector] = useState(false);
-  const [categorizedTags, setCategorizedTags] = useState<Record<string, Tag[][]>>({});
+  const [categorizedTags, setCategorizedTags] = useState<Record<string, TagType[][]>>({});
   const [usedTagTiers, setUsedTagTiers] = useState(0);
   const [totalTagTiers, setTotalTagTiers] = useState(0);
   const [canShowMore, setCanShowMore] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const [selectedTags, setSelectedTags] = useState<TagType[]>([]);
   const isMobile = useIsMobile();
   
   useEffect(() => {
@@ -156,7 +156,7 @@ const Recommendations = () => {
     window.open(`https://www.themoviedb.org/movie/${movie.id}`, '_blank');
   };
   
-  const toggleTagSelection = (tag: Tag) => {
+  const toggleTagSelection = (tag: TagType) => {
     if (selectedTags.some(t => t.id === tag.id)) {
       setSelectedTags(selectedTags.filter(t => t.id !== tag.id));
     } else {
