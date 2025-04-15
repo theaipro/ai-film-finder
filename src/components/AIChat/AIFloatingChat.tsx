@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useProfile } from '@/context/ProfileContext';
 import { geminiService, GeminiService } from '@/services/geminiService';
@@ -18,34 +19,18 @@ interface Message {
   timestamp: Date;
 }
 
-const CHAT_HISTORY_KEY = 'ai_chat_history';
-
 const AIFloatingChat = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState('');
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const savedMessages = localStorage.getItem(CHAT_HISTORY_KEY);
-    if (savedMessages) {
-      try {
-        return JSON.parse(savedMessages);
-      } catch (e) {
-        console.error('Error parsing saved messages:', e);
-        return [{
-          id: '1',
-          content: "Hello! I'm your movie assistant. Ask me about movies, recommendations, or your preferences!",
-          role: 'assistant',
-          timestamp: new Date()
-        }];
-      }
-    }
-    return [{
+  const [messages, setMessages] = useState<Message[]>([
+    {
       id: '1',
       content: "Hello! I'm your movie assistant. Ask me about movies, recommendations, or your preferences!",
       role: 'assistant',
       timestamp: new Date()
-    }];
-  });
+    }
+  ]);
   const [isLoading, setIsLoading] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [apiKeySet, setApiKeySet] = useState(true);
@@ -54,10 +39,6 @@ const AIFloatingChat = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const { profile } = useProfile();
   const isMobile = useIsMobile();
-
-  useEffect(() => {
-    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messages));
-  }, [messages]);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -124,14 +105,14 @@ const AIFloatingChat = () => {
   };
 
   const clearChat = () => {
-    const welcomeMessage = {
-      id: 'welcome',
-      content: "Chat cleared! How can I help you with movies today?",
-      role: 'assistant' as const,
-      timestamp: new Date()
-    };
-    setMessages([welcomeMessage]);
-    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify([welcomeMessage]));
+    setMessages([
+      {
+        id: 'welcome',
+        content: "Chat cleared! How can I help you with movies today?",
+        role: 'assistant',
+        timestamp: new Date()
+      }
+    ]);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
