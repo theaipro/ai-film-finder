@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Tag } from '@/types';
 import { X, Plus, Star, ChevronUp, ChevronDown, CirclePercent } from 'lucide-react';
@@ -75,6 +76,8 @@ const TagSelector: React.FC<TagSelectorProps> = ({
           return 'bg-purple-200 text-purple-900 dark:bg-purple-800 dark:text-purple-200 font-semibold';
         case 'tone':
           return 'bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-200 font-semibold';
+        case 'keyword':
+          return 'bg-emerald-200 text-emerald-900 dark:bg-emerald-800 dark:text-emerald-200 font-semibold';
         case 'custom':
           return 'bg-green-200 text-green-900 dark:bg-green-800 dark:text-green-200 font-semibold';
         default:
@@ -90,6 +93,8 @@ const TagSelector: React.FC<TagSelectorProps> = ({
         return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300';
       case 'tone':
         return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300';
+      case 'keyword':
+        return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
       case 'custom':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
       default:

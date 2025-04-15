@@ -1,4 +1,5 @@
 
+
 export interface Movie {
   id: number;
   title: string;
@@ -26,6 +27,9 @@ export type TagType =
   | 'tone'
   | 'length'
   | 'era'
+  | 'keyword'  // Added keyword as a tag type
+  | 'actor'    // Added actor type
+  | 'director' // Added director type
   | 'custom';
 
 export interface Tag {
@@ -59,3 +63,4 @@ export interface UserProfile {
   bio?: string;
   favoriteGenres?: string[];
 }
+
