@@ -10,6 +10,7 @@ import Profile from "./pages/Profile";
 import Mood from "./pages/Mood";
 import Recommendations from "./pages/Recommendations";
 import NotFound from "./pages/NotFound";
+import AIFloatingChat from "./components/AIChat/AIFloatingChat";
 
 // Create a new query client instance
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => {
               <Route path="/recommendations" element={<Recommendations />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            <AIFloatingChat />
           </BrowserRouter>
         </TooltipProvider>
       </ProfileProvider>
