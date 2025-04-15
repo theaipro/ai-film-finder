@@ -52,6 +52,15 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+                // Film Fan Finder colors
+                film: {
+                    dark: '#1A1F2C',      // Dark charcoal for cinema-like feel
+                    primary: '#6E59A5',   // Deep purple for main theme
+                    secondary: '#8E9196', // Soft slate for neutral elements
+                    accent: '#F97316',    // Bright orange for highlights
+                    light: '#F6F6F7',     // Light gray for text
+                    tag: '#E5DEFF',       // Soft purple for tags
+                },
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
