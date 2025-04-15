@@ -24,7 +24,15 @@ const TagQuestions: React.FC<TagQuestionProps> = ({
   });
 
   const handleSubmit = (data: { tags: string[] }) => {
-    const selectedTags = suggestedTags.filter(tag => data.tags.includes(tag.id));
+    // Mark selected tags as confirmed with user override
+    const selectedTags = suggestedTags
+      .filter(tag => data.tags.includes(tag.id))
+      .map(tag => ({
+        ...tag,
+        confirmed: true,
+        override: true
+      }));
+    
     onSaveTags(selectedTags);
   };
 

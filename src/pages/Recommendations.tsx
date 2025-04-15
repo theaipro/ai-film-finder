@@ -30,17 +30,26 @@ const Recommendations = () => {
       if (profile.currentMood) {
         movies = await getMoodBasedRecommendations(profile.currentMood);
       } 
-      // Otherwise use tag-based recommendations
+      // Otherwise use tag-based recommendations - prefer confirmed tags when available
       else if (profile.tags && profile.tags.length > 0) {
         const likedMovieIds = profile.likedMovies ? profile.likedMovies.map(m => m.id) : [];
         const dislikedMovieIds = profile.dislikedMovies ? profile.dislikedMovies.map(m => m.id) : [];
         const avoidedMovieIds = profile.avoidedMovies ? profile.avoidedMovies.map(m => m.id) : [];
         
+        // Use the appropriate tag set for recommendations:
+        // 1. Confirmed tags if there are any (more reliable)
+        // 2. All tags as a fallback (less reliable but better than nothing)
+        const tagsForRecommendation = profile.tags;
+        
+        // Get avoided tags if any
+        const avoidedTags = profile.avoidedTags || [];
+        
         movies = await getTagBasedRecommendations(
-          profile.tags,
+          tagsForRecommendation,
           likedMovieIds,
           dislikedMovieIds,
-          avoidedMovieIds
+          avoidedMovieIds,
+          avoidedTags
         );
       } 
       // Fallback to popular movies if no mood or tags
@@ -147,14 +156,43 @@ const Recommendations = () => {
               <div className="flex flex-wrap items-center gap-2">
                 <TagIcon className="h-4 w-4 text-film-primary" />
                 <span className="text-sm">Based on your preferences:</span>
-                {profile.tags.slice(0, 5).map(tag => (
-                  <Badge key={tag.id} variant="outline" className="bg-film-tag/50">
-                    {tag.name}
-                  </Badge>
-                ))}
+                
+                {/* Confirmed tags first with star indicator */}
+                {profile.tags
+                  .filter(tag => tag.confirmed)
+                  .slice(0, 3)
+                  .map(tag => (
+                    <Badge 
+                      key={tag.id} 
+                      variant="outline" 
+                      className="bg-blue-200 dark:bg-blue-900/60 font-medium"
+                      title={`Confirmed tag (appears in ${tag.occurrences || 0} movies)`}
+                    >
+                      ★ {tag.name}
+                    </Badge>
+                  ))}
+                
+                {/* Then other tags */}
+                {profile.tags
+                  .filter(tag => !tag.confirmed)
+                  .slice(0, profile.tags.filter(t => t.confirmed).length < 3 ? 5 - profile.tags.filter(t => t.confirmed).length : 2)
+                  .map(tag => (
+                    <Badge 
+                      key={tag.id} 
+                      variant="outline" 
+                      className="bg-film-tag/50"
+                      title={`Tag appears in ${tag.occurrences || 0} movies`}
+                    >
+                      {tag.name}
+                    </Badge>
+                  ))}
+                
+                {/* Display tags count summary */}
                 {profile.tags.length > 5 && (
                   <Badge variant="outline" className="bg-film-tag/50">
-                    +{profile.tags.length - 5} more
+                    +{profile.tags.length - 5} more 
+                    {profile.tags.filter(t => t.confirmed).length > 0 && 
+                      ` (${profile.tags.filter(t => t.confirmed).length} confirmed)`}
                   </Badge>
                 )}
               </div>

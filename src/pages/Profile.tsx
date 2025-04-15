@@ -41,8 +41,18 @@ const Profile = () => {
   useEffect(() => {
     const generateTags = async () => {
       if (profile.likedMovies.length > 0) {
-        const extractedTags = await extractTagsFromMovies(profile.likedMovies);
-        setSuggestedTags(extractedTags);
+        const { likedTags, confirmedTags } = await extractTagsFromMovies(profile.likedMovies);
+        // Combine both sets of tags for suggested tags
+        const mergedTags = [...confirmedTags];
+        
+        // Add liked tags that aren't already in confirmed tags
+        likedTags.forEach(likedTag => {
+          if (!confirmedTags.some(confirmedTag => confirmedTag.id === likedTag.id)) {
+            mergedTags.push(likedTag);
+          }
+        });
+        
+        setSuggestedTags(mergedTags);
         
         // Show tag questions when user has liked at least 3 movies and hasn't seen the questions yet
         if (profile.likedMovies.length >= 3 && profile.tags.length === 0) {

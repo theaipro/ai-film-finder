@@ -34,7 +34,10 @@ const Index = () => {
                   Get Recommendations
                 </Button>
                 <p className="mt-4 text-sm text-muted-foreground">
-                  Your profile already has {profile.likedMovies.length} liked movies and {profile.tags.length} tags!
+                  Your profile already has {profile.likedMovies.length} liked movies and {profile.tags.length} tags
+                  {profile.tags.filter(t => t.confirmed).length > 0 ? 
+                    ` (${profile.tags.filter(t => t.confirmed).length} confirmed)` : 
+                    ''}!
                 </p>
               </div>
             ) : (

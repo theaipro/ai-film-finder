@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Movie, Tag, Mood, UserProfile } from '@/types';
+import { extractTagsFromMovies } from '@/services/movieService';
 
 interface ProfileContextType {
   profile: UserProfile;
@@ -11,8 +12,22 @@ interface ProfileContextType {
   removeAvoidedMovie: (movieId: number) => void;
   addWatchLaterMovie: (movie: Movie) => void;
   removeWatchLaterMovie: (movieId: number) => void;
+  
+  // New tag functions
+  addLikedTag: (tag: Tag) => void;
+  removeLikedTag: (tagId: string) => void;
+  addConfirmedTag: (tag: Tag) => void;
+  removeConfirmedTag: (tagId: string) => void;
+  addAvoidedTag: (tag: Tag) => void;
+  removeAvoidedTag: (tagId: string) => void;
+  updateConfirmedTags: () => void;
+  promoteTagToConfirmed: (tagId: string) => void;
+  demoteTagFromConfirmed: (tagId: string) => void;
+  
+  // Legacy tag functions for backward compatibility
   addTag: (tag: Tag) => void;
   removeTag: (tagId: string) => void;
+  
   setCurrentMood: (mood: Mood) => void;
   updateProfile: (updates: Partial<UserProfile>) => void;
   clearProfile: () => void;
@@ -23,7 +38,9 @@ const initialProfile: UserProfile = {
   dislikedMovies: [],
   avoidedMovies: [],
   watchLaterMovies: [],
-  tags: [],
+  likedTags: [],
+  confirmedTags: [],
+  avoidedTags: [],
   currentMood: undefined,
   name: '',
   bio: '',
@@ -56,6 +73,30 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       if (isAlreadyLiked) return prev;
       
+      // Schedule tag extraction from the new movie collection
+      setTimeout(async () => {
+        try {
+          // When adding a new liked movie, we want to automatically extract and update tags
+          const updatedMovies = [...prev.likedMovies, movie];
+          const { likedTags, confirmedTags } = await extractTagsFromMovies(updatedMovies);
+          
+          // Update the profile with the new tags
+          setProfile(current => ({
+            ...current,
+            likedTags,
+            confirmedTags: confirmedTags.map(tag => ({
+              ...tag,
+              // Preserve user overrides
+              override: current.confirmedTags.some(
+                t => t.id === tag.id && t.override
+              ) || false
+            }))
+          }));
+        } catch (error) {
+          console.error("Error updating tags after adding movie:", error);
+        }
+      }, 0);
+      
       return {
         ...prev,
         likedMovies: [...prev.likedMovies, movie],
@@ -67,10 +108,45 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const removeLikedMovie = (movieId: number) => {
-    setProfile(prev => ({
-      ...prev,
-      likedMovies: prev.likedMovies.filter(m => m.id !== movieId)
-    }));
+    setProfile(prev => {
+      const updatedLikedMovies = prev.likedMovies.filter(m => m.id !== movieId);
+      
+      // Schedule tag extraction from the updated movie collection
+      setTimeout(async () => {
+        try {
+          if (updatedLikedMovies.length > 0) {
+            const { likedTags, confirmedTags } = await extractTagsFromMovies(updatedLikedMovies);
+            
+            // Update the profile with the recalculated tags
+            setProfile(current => ({
+              ...current,
+              likedTags,
+              confirmedTags: confirmedTags.map(tag => ({
+                ...tag,
+                // Preserve user overrides
+                override: current.confirmedTags.some(
+                  t => t.id === tag.id && t.override
+                ) || false
+              }))
+            }));
+          } else {
+            // If no liked movies remain, clear out tags (except manually overridden ones)
+            setProfile(current => ({
+              ...current,
+              likedTags: [],
+              confirmedTags: current.confirmedTags.filter(tag => tag.override)
+            }));
+          }
+        } catch (error) {
+          console.error("Error updating tags after removing movie:", error);
+        }
+      }, 0);
+      
+      return {
+        ...prev,
+        likedMovies: updatedLikedMovies
+      };
+    });
   };
 
   const addDislikedMovie = (movie: Movie) => {
@@ -150,24 +226,235 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }));
   };
 
-  const addTag = (tag: Tag) => {
+  // Function to calculate if a tag should be confirmed based on threshold
+  const shouldBeConfirmed = (occurrences: number, totalLikedTags: number): boolean => {
+    if (totalLikedTags <= 50) {
+      return occurrences >= 2;
+    } else {
+      // Calculate 5% threshold (rounded up)
+      const threshold = Math.ceil(totalLikedTags * 0.05);
+      return occurrences >= threshold;
+    }
+  };
+  
+  // Function to update confirmed tags based on current liked tags
+  const updateConfirmedTags = () => {
     setProfile(prev => {
-      // Check if tag already exists
-      const tagExists = prev.tags.some(t => t.id === tag.id);
-      if (tagExists) return prev;
+      const totalLikedTags = prev.likedTags.length;
+      
+      // Create a map of all tags that should be confirmed
+      const confirmedMap = new Map<string, Tag>();
+      
+      // First add all manually overridden tags
+      prev.confirmedTags
+        .filter(tag => tag.override)
+        .forEach(tag => confirmedMap.set(tag.id, tag));
+      
+      // Then, process liked tags to see if they should be promoted
+      prev.likedTags.forEach(tag => {
+        if (tag.occurrences && 
+           (shouldBeConfirmed(tag.occurrences, totalLikedTags) || tag.override)) {
+          confirmedMap.set(tag.id, {...tag, confirmed: true});
+        }
+      });
       
       return {
         ...prev,
-        tags: [...prev.tags, tag]
+        confirmedTags: Array.from(confirmedMap.values())
       };
     });
   };
 
-  const removeTag = (tagId: string) => {
+  const addLikedTag = (tag: Tag) => {
+    setProfile(prev => {
+      // Check if tag already exists in liked tags
+      const tagExists = prev.likedTags.some(t => t.id === tag.id);
+      
+      // If tag exists, update its occurrences
+      if (tagExists) {
+        const updatedLikedTags = prev.likedTags.map(t => {
+          if (t.id === tag.id) {
+            const occurrences = (t.occurrences || 0) + 1;
+            const movieIds = [...(t.movieIds || []), ...(tag.movieIds || [])];
+            // Remove duplicates from movieIds
+            const uniqueMovieIds = [...new Set(movieIds)];
+            return {...t, occurrences, movieIds: uniqueMovieIds};
+          }
+          return t;
+        });
+        
+        return {
+          ...prev,
+          likedTags: updatedLikedTags
+        };
+      }
+      
+      // Otherwise, add the new tag with occurrences=1
+      const newTag = {
+        ...tag, 
+        occurrences: 1,
+        movieIds: tag.movieIds || []
+      };
+      
+      return {
+        ...prev,
+        likedTags: [...prev.likedTags, newTag]
+      };
+    });
+    
+    // Update confirmed tags after adding a liked tag
+    updateConfirmedTags();
+  };
+  
+  const removeLikedTag = (tagId: string) => {
     setProfile(prev => ({
       ...prev,
-      tags: prev.tags.filter(t => t.id !== tagId)
+      likedTags: prev.likedTags.filter(t => t.id !== tagId)
     }));
+    
+    // Update confirmed tags after removing a liked tag
+    updateConfirmedTags();
+  };
+  
+  const addConfirmedTag = (tag: Tag) => {
+    setProfile(prev => {
+      // Check if tag already exists in confirmed tags
+      const tagExists = prev.confirmedTags.some(t => t.id === tag.id);
+      if (tagExists) return prev;
+      
+      return {
+        ...prev,
+        confirmedTags: [...prev.confirmedTags, {...tag, confirmed: true, override: true}]
+      };
+    });
+  };
+  
+  const removeConfirmedTag = (tagId: string) => {
+    setProfile(prev => ({
+      ...prev,
+      confirmedTags: prev.confirmedTags.filter(t => t.id !== tagId)
+    }));
+  };
+  
+  const addAvoidedTag = (tag: Tag) => {
+    setProfile(prev => {
+      // Check if tag already exists in avoided tags
+      const tagExists = prev.avoidedTags.some(t => t.id === tag.id);
+      if (tagExists) return prev;
+      
+      return {
+        ...prev,
+        avoidedTags: [...prev.avoidedTags, tag]
+      };
+    });
+  };
+  
+  const removeAvoidedTag = (tagId: string) => {
+    setProfile(prev => ({
+      ...prev,
+      avoidedTags: prev.avoidedTags.filter(t => t.id !== tagId)
+    }));
+  };
+  
+  // Tag promotion and demotion functions
+  const promoteTagToConfirmed = (tagId: string) => {
+    setProfile(prev => {
+      // Check if the tag exists in liked tags
+      const likedTag = prev.likedTags.find(t => t.id === tagId);
+      
+      if (likedTag) {
+        // Remove from liked tags
+        const updatedLikedTags = prev.likedTags.filter(t => t.id !== tagId);
+        
+        // Add to confirmed tags with override flag and special name indicator
+        const confirmedTag = {
+          ...likedTag,
+          confirmed: true,
+          override: true,
+          // Prepend a star to the name if it doesn't already have one
+          name: likedTag.name.startsWith('⭐') ? likedTag.name : `⭐ ${likedTag.name}`
+        };
+        
+        // Check if it's already in confirmed tags
+        const alreadyInConfirmed = prev.confirmedTags.some(t => t.id === tagId);
+        
+        return {
+          ...prev,
+          likedTags: updatedLikedTags,
+          confirmedTags: alreadyInConfirmed 
+            ? prev.confirmedTags.map(t => t.id === tagId ? confirmedTag : t) 
+            : [...prev.confirmedTags, confirmedTag]
+        };
+      }
+      
+      return prev;
+    });
+  };
+  
+  const demoteTagFromConfirmed = (tagId: string) => {
+    setProfile(prev => {
+      // Check if the tag exists in confirmed tags
+      const confirmedTag = prev.confirmedTags.find(t => t.id === tagId);
+      
+      if (confirmedTag) {
+        // If this was a system-calculated confirmed tag, just remove the override
+        if (!confirmedTag.override && confirmedTag.occurrences) {
+          return {
+            ...prev,
+            confirmedTags: prev.confirmedTags.map(t => 
+              t.id === tagId ? { ...t, override: false } : t
+            )
+          };
+        } else {
+          // Otherwise, remove from confirmed and add to liked tags if not already there
+          const updatedConfirmedTags = prev.confirmedTags.filter(t => t.id !== tagId);
+          
+          // Check if it's already in liked tags
+          const alreadyInLiked = prev.likedTags.some(t => t.id === tagId);
+          
+          if (!alreadyInLiked) {
+            // Only add to liked tags if it's not already there
+            const likedTag = {
+              ...confirmedTag,
+              confirmed: false,
+              override: false,
+              // Remove the star from the name if it has one
+              name: confirmedTag.name.startsWith('⭐') 
+                ? confirmedTag.name.substring(2).trim() 
+                : confirmedTag.name
+            };
+            
+            return {
+              ...prev,
+              confirmedTags: updatedConfirmedTags,
+              likedTags: [...prev.likedTags, likedTag]
+            };
+          }
+          
+          return {
+            ...prev,
+            confirmedTags: updatedConfirmedTags
+          };
+        }
+      }
+      
+      return prev;
+    });
+  };
+  
+  // Legacy functions for backward compatibility
+  const addTag = (tag: Tag) => {
+    if (tag.confirmed) {
+      addConfirmedTag(tag);
+    } else {
+      addLikedTag(tag);
+    }
+  };
+
+  const removeTag = (tagId: string) => {
+    removeLikedTag(tagId);
+    removeConfirmedTag(tagId);
+    removeAvoidedTag(tagId);
   };
 
   const setCurrentMood = (mood: Mood) => {
@@ -199,6 +486,15 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
       removeAvoidedMovie,
       addWatchLaterMovie,
       removeWatchLaterMovie,
+      addLikedTag,
+      removeLikedTag,
+      addConfirmedTag,
+      removeConfirmedTag,
+      addAvoidedTag,
+      removeAvoidedTag,
+      updateConfirmedTags,
+      promoteTagToConfirmed,
+      demoteTagFromConfirmed,
       addTag,
       removeTag,
       setCurrentMood,
@@ -215,5 +511,21 @@ export const useProfile = () => {
   if (context === undefined) {
     throw new Error('useProfile must be used within a ProfileProvider');
   }
-  return context;
+
+  // Add a compatibility layer for the old tags property
+  const compatibleProfile = {
+    ...context.profile,
+    // For backward compatibility, combine confirmed tags as the primary tags
+    tags: [
+      ...context.profile.confirmedTags,
+      ...context.profile.likedTags.filter(lt => 
+        !context.profile.confirmedTags.some(ct => ct.id === lt.id)
+      )
+    ]
+  };
+
+  return {
+    ...context,
+    profile: compatibleProfile
+  };
 };

@@ -77,43 +77,70 @@ export const getMoviePosterUrl = (posterPath: string | null, size = 'w500'): str
   return `https://image.tmdb.org/t/p/${size}${posterPath}`;
 };
 
-// Function to extract tags from movies
-export const extractTagsFromMovies = async (movies: Movie[]): Promise<Tag[]> => {
+// Function to extract tags from movies with improved confidence calculation
+export const extractTagsFromMovies = async (movies: Movie[]): Promise<{
+  likedTags: Tag[], 
+  confirmedTags: Tag[]
+}> => {
   // Get all genres first
   const genres = await getGenres();
   
-  // Collect all genre IDs from the movies
-  const genreMap = new Map<number, number>();
+  // Collect all genre IDs from the movies and the movies that contain them
+  const genreMap = new Map<number, Set<number>>();
+  
   movies.forEach(movie => {
     if (movie.genre_ids) {
       movie.genre_ids.forEach(genreId => {
-        const current = genreMap.get(genreId) || 0;
-        genreMap.set(genreId, current + 1);
+        const movieIds = genreMap.get(genreId) || new Set<number>();
+        movieIds.add(movie.id);
+        genreMap.set(genreId, movieIds);
       });
     } else if (movie.genres) {
       movie.genres.forEach(genre => {
-        const current = genreMap.get(genre.id) || 0;
-        genreMap.set(genre.id, current + 1);
+        const movieIds = genreMap.get(genre.id) || new Set<number>();
+        movieIds.add(movie.id);
+        genreMap.set(genre.id, movieIds);
       });
     }
   });
   
-  // Convert to tags, prioritizing the most common genres
-  const genreTags: Tag[] = Array.from(genreMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([genreId, count]) => {
+  // Create liked tags with occurrences and movie references
+  const likedTags: Tag[] = Array.from(genreMap.entries())
+    .sort((a, b) => b[1].size - a[1].size)
+    .map(([genreId, movieIdsSet]) => {
       const genre = genres.find(g => g.id === genreId);
+      const occurrences = movieIdsSet.size;
+      const movieIds = Array.from(movieIdsSet);
+      
       return {
         id: `genre-${genreId}`,
         name: genre?.name || 'Unknown Genre',
         source: 'auto',
-        type: 'genre'
+        type: 'genre',
+        occurrences,
+        movieIds
       };
     });
   
-  // We could add more sophisticated tag extraction here in the future
-  // For now, we'll just return genre tags
-  return genreTags;
+  // Calculate threshold for confirmed tags
+  const totalTags = likedTags.length;
+  const threshold = totalTags <= 50 ? 2 : Math.ceil(totalTags * 0.05);
+  
+  // Filter confirmed tags based on threshold
+  const confirmedTags = likedTags.filter(tag => 
+    (tag.occurrences || 0) >= threshold
+  ).map(tag => ({...tag, confirmed: true}));
+  
+  // TODO: In the future, we could add more tag types like:
+  // - Keywords from TMDB
+  // - Actors/directors
+  // - Time periods
+  // - Themes extracted from descriptions
+  
+  return {
+    likedTags,
+    confirmedTags
+  };
 };
 
 // Map mood to genre combinations for recommendations
@@ -165,15 +192,28 @@ export const getTagBasedRecommendations = async (
   tags: Tag[],
   likedMovieIds: number[],
   dislikedMovieIds: number[],
-  avoidedMovieIds: number[] = [], // Added avoided movie IDs parameter
+  avoidedMovieIds: number[] = [],
+  avoidedTags: Tag[] = [],
   page = 1
 ): Promise<Movie[]> => {
   try {
-    // Extract genre IDs from tags
-    const genreIds = tags
+    // Prioritize confirmed tags over regular tags
+    const confirmedTags = tags.filter(tag => tag.confirmed);
+    
+    // If there are confirmed tags, use those preferentially
+    const tagsToUse = confirmedTags.length > 0 ? confirmedTags : tags;
+    
+    // Track avoided genre IDs
+    const avoidedGenreIds = avoidedTags
       .filter(tag => tag.type === 'genre')
       .map(tag => parseInt(tag.id.replace('genre-', '')))
       .filter(id => !isNaN(id));
+    
+    // Extract genre IDs from prioritized tags, excluding avoided genres
+    const genreIds = tagsToUse
+      .filter(tag => tag.type === 'genre')
+      .map(tag => parseInt(tag.id.replace('genre-', '')))
+      .filter(id => !isNaN(id) && !avoidedGenreIds.includes(id));
     
     // If no genre IDs or liked movies, return popular movies
     if (genreIds.length === 0 && likedMovieIds.length === 0) {
