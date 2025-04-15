@@ -1,3 +1,4 @@
+
 export interface Movie {
   id: number;
   title: string;
@@ -8,7 +9,7 @@ export interface Movie {
   genre_ids?: number[];
   genres?: Genre[];
   vote_average: number;
-  likabilityPercentage?: number; // Add this line
+  likabilityPercentage?: number;
   // Add additional properties as needed
 }
 
