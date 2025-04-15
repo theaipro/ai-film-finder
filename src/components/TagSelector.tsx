@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Tag } from '@/types';
 import { X, Plus, Star, ChevronUp, ChevronDown, CirclePercent } from 'lucide-react';
@@ -122,7 +121,7 @@ const TagSelector: React.FC<TagSelectorProps> = ({
     'director': 'Directors'
   };
 
-  if (tags.length === 0) {
+  if (!Array.isArray(tags) || tags.length === 0) {
     return (
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">No tags yet. Add some to improve recommendations.</p>

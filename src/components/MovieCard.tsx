@@ -32,7 +32,6 @@ const MovieCard: React.FC<MovieCardProps> = ({
     removeWatchLaterMovie
   } = useProfile();
   
-  // Add null checks for all arrays
   const isLiked = profile.likedMovies?.some(m => m.id === movie.id) || false;
   const isDisliked = profile.dislikedMovies?.some(m => m.id === movie.id) || false;
   const isAvoided = profile.avoidedMovies?.some(m => m.id === movie.id) || false;

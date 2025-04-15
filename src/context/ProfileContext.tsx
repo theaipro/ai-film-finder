@@ -56,20 +56,25 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Try to load from localStorage
     const savedProfile = localStorage.getItem('userProfile');
     if (savedProfile) {
-      // Ensure all arrays are initialized even if they're missing in saved data
-      const parsedProfile = JSON.parse(savedProfile);
-      return {
-        ...initialProfile, // Start with all defaults
-        ...parsedProfile,  // Override with saved values
-        // Ensure these critical arrays exist and are arrays
-        likedMovies: Array.isArray(parsedProfile.likedMovies) ? parsedProfile.likedMovies : [],
-        dislikedMovies: Array.isArray(parsedProfile.dislikedMovies) ? parsedProfile.dislikedMovies : [],
-        avoidedMovies: Array.isArray(parsedProfile.avoidedMovies) ? parsedProfile.avoidedMovies : [],
-        watchLaterMovies: Array.isArray(parsedProfile.watchLaterMovies) ? parsedProfile.watchLaterMovies : [],
-        likedTags: Array.isArray(parsedProfile.likedTags) ? parsedProfile.likedTags : [],
-        confirmedTags: Array.isArray(parsedProfile.confirmedTags) ? parsedProfile.confirmedTags : [],
-        avoidedTags: Array.isArray(parsedProfile.avoidedTags) ? parsedProfile.avoidedTags : [],
-      };
+      try {
+        // Ensure all arrays are initialized even if they're missing in saved data
+        const parsedProfile = JSON.parse(savedProfile);
+        return {
+          ...initialProfile, // Start with all defaults
+          ...parsedProfile,  // Override with saved values
+          // Ensure these critical arrays exist and are arrays
+          likedMovies: Array.isArray(parsedProfile.likedMovies) ? parsedProfile.likedMovies : [],
+          dislikedMovies: Array.isArray(parsedProfile.dislikedMovies) ? parsedProfile.dislikedMovies : [],
+          avoidedMovies: Array.isArray(parsedProfile.avoidedMovies) ? parsedProfile.avoidedMovies : [],
+          watchLaterMovies: Array.isArray(parsedProfile.watchLaterMovies) ? parsedProfile.watchLaterMovies : [],
+          likedTags: Array.isArray(parsedProfile.likedTags) ? parsedProfile.likedTags : [],
+          confirmedTags: Array.isArray(parsedProfile.confirmedTags) ? parsedProfile.confirmedTags : [],
+          avoidedTags: Array.isArray(parsedProfile.avoidedTags) ? parsedProfile.avoidedTags : [],
+        };
+      } catch (error) {
+        console.error("Error parsing saved profile:", error);
+        return initialProfile;
+      }
     }
     return initialProfile;
   });
@@ -82,30 +87,36 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Function to handle updating tags when movies are added/removed
   const updateTagsFromMovies = async () => {
     try {
-      // Fix here: Make sure we're passing parameters according to the function signature
-      // The error indicates extractTagsFromMovies expects only 1 argument, so we need to pass
-      // an object that contains both likedMovies and dislikedMovies
+      // Ensure arrays are initialized
+      const safeProfile = {
+        ...profile,
+        likedMovies: Array.isArray(profile.likedMovies) ? profile.likedMovies : [],
+        dislikedMovies: Array.isArray(profile.dislikedMovies) ? profile.dislikedMovies : [],
+      };
+      
+      // Use extractTagsFromMovies with the safe profile
       const { likedTags: newLikedTags, confirmedTags: newConfirmedTags } = 
         await extractTagsFromMovies({
-          likedMovies: profile.likedMovies,
-          dislikedMovies: profile.dislikedMovies
+          likedMovies: safeProfile.likedMovies,
+          dislikedMovies: safeProfile.dislikedMovies
         });
       
       // Update tags with net scores (liked - disliked*2)
-      const processedLikedTags = newLikedTags.map(tag => {
+      const processedLikedTags = Array.isArray(newLikedTags) ? newLikedTags.map(tag => {
         const netScore = calculateTagNetScore(tag.occurrences, tag.dislikedOccurrences);
         return { ...tag, netScore };
-      });
+      }) : [];
       
-      const processedConfirmedTags = newConfirmedTags.map(tag => {
+      const processedConfirmedTags = Array.isArray(newConfirmedTags) ? newConfirmedTags.map(tag => {
         const netScore = calculateTagNetScore(tag.occurrences, tag.dislikedOccurrences);
         return { ...tag, netScore };
-      });
+      }) : [];
       
       // Preserve user overrides
+      const safePrevConfirmedTags = Array.isArray(profile.confirmedTags) ? profile.confirmedTags : [];
       const updatedConfirmedTags = processedConfirmedTags.map(tag => ({
         ...tag,
-        override: profile.confirmedTags.some(t => t.id === tag.id && t.override) || false
+        override: safePrevConfirmedTags.some(t => t.id === tag.id && t.override) || false
       }));
       
       setProfile(current => ({

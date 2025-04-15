@@ -1,189 +1,374 @@
 
-// Get recommendations based on tags and liked movies with likability percentage
-export const getTagBasedRecommendations = async (
-  tags: Tag[],
-  likedMovieIds: number[],
-  dislikedMovieIds: number[],
-  avoidedMovieIds: number[] = [],
-  avoidedTags: Tag[] = [],
-  page = 1
-): Promise<Movie[]> => {
+import { Movie, Tag, Genre } from '@/types';
+import axios from 'axios';
+import { processKeywordsToTags, getMoviesKeywords } from './keywordService';
+
+// This is a public API key for demo purposes only
+// In a production app, you would store this securely
+const API_KEY = '2dca580c2a14b55200e784d157207b4d';
+const BASE_URL = 'https://api.themoviedb.org/3';
+
+// Create axios instance with default config
+const api = axios.create({
+  baseURL: BASE_URL,
+  params: {
+    api_key: API_KEY,
+    language: 'en-US',
+  }
+});
+
+/**
+ * Get popular movies from TMDB API
+ */
+export const getPopularMovies = async (page = 1): Promise<Movie[]> => {
   try {
-    if (!Array.isArray(tags)) {
-      console.warn('tags is not an array in getTagBasedRecommendations');
-      return [];
-    }
-    
-    // Separate tags by confirmation status
-    const confirmedTags = tags.filter(tag => tag.confirmed);
-    const likedTags = tags.filter(tag => !tag.confirmed);
-    
-    // Track avoided genre IDs
-    const avoidedGenreIds = Array.isArray(avoidedTags) 
-      ? avoidedTags
-          .filter(tag => tag.type === 'genre')
-          .map(tag => parseInt(tag.id.replace('genre-', '')))
-          .filter(id => !isNaN(id))
-      : [];
-    
-    // Extract genre IDs from all tags, applying weights
-    // Confirmed tags get double weight
-    const genreWeights: Record<number, number> = {};
-    
-    // Process confirmed tags with double weight
-    confirmedTags
-      .filter(tag => tag.type === 'genre')
-      .forEach(tag => {
-        const genreId = parseInt(tag.id.replace('genre-', ''));
-        if (!isNaN(genreId) && !avoidedGenreIds.includes(genreId)) {
-          // Confirmed tags get double weight
-          genreWeights[genreId] = (genreWeights[genreId] || 0) + (tag.occurrences || 1) * 2;
-        }
-      });
-    
-    // Process liked tags with normal weight
-    likedTags
-      .filter(tag => tag.type === 'genre')
-      .forEach(tag => {
-        const genreId = parseInt(tag.id.replace('genre-', ''));
-        if (!isNaN(genreId) && !avoidedGenreIds.includes(genreId)) {
-          // Liked tags get normal weight
-          genreWeights[genreId] = (genreWeights[genreId] || 0) + (tag.occurrences || 1);
-        }
-      });
-    
-    // Collect keyword tags to use for keyword-based search
-    // This is especially useful when we don't have enough genre data
-    const keywordTags = tags
-      .filter(tag => tag.type === 'keyword' && 
-              !avoidedTags.some(avoided => avoided.id === tag.id))
-      .sort((a, b) => {
-        // Sort by confirmed status first, then by occurrences
-        if (a.confirmed && !b.confirmed) return -1;
-        if (!a.confirmed && b.confirmed) return 1;
-        return (b.occurrences || 0) - (a.occurrences || 0);
-      })
-      .slice(0, 5); // Take top 5 keywords
-    
-    // Get the top weighted genres
-    const topGenreIds = Object.entries(genreWeights)
-      .sort((a, b) => Number(b[1]) - Number(a[1]))
-      .slice(0, 5) // Limit to top 5 genres for better API results
-      .map(entry => Number(entry[0]));
-    
-    // Build API calls based on available data
-    const apiCalls = [];
-    
-    // 1. Genre-based API call
-    if (topGenreIds.length > 0) {
-      const genreParams = {
-        page,
-        sort_by: 'popularity.desc',
-        with_genres: topGenreIds.join(',')
-      };
-      apiCalls.push(api.get('/discover/movie', { params: genreParams }));
-    }
-    
-    // 2. Keyword-based API calls - one per keyword for better results
-    for (const keyword of keywordTags) {
-      // Extract the keyword name from the tag
-      const keywordName = keyword.name;
-      
-      const keywordParams = {
-        page,
-        sort_by: 'popularity.desc',
-        query: keywordName,
-        include_adult: false
-      };
-      apiCalls.push(api.get('/search/movie', { params: keywordParams }));
-    }
-    
-    // If no API calls (no genres or keywords), return popular movies
-    if (apiCalls.length === 0) {
-      return getPopularMovies(page);
-    }
-    
-    // Execute all API calls in parallel
-    const responses = await Promise.all(apiCalls);
-    
-    // Combine results from all API calls and remove duplicates
-    const seenMovieIds = new Set<number>();
-    let allResults: Movie[] = [];
-    
-    responses.forEach(response => {
-      if (response.data && response.data.results) {
-        const uniqueMovies = response.data.results.filter((movie: Movie) => {
-          if (seenMovieIds.has(movie.id)) {
-            return false;
-          }
-          seenMovieIds.add(movie.id);
-          return true;
-        });
-        allResults = [...allResults, ...uniqueMovies];
-      }
+    const response = await api.get('/movie/popular', {
+      params: { page }
     });
     
-    // Filter out disliked and avoided movies
-    if (dislikedMovieIds.length > 0 || avoidedMovieIds.length > 0) {
-      allResults = allResults.filter(movie => 
-        !dislikedMovieIds.includes(movie.id) && 
-        !avoidedMovieIds.includes(movie.id)
-      );
-    }
-    
-    // Calculate likability percentage for each movie
-    allResults = allResults.map(movie => {
-      let likabilityScore = 0;
-      let maxPossibleScore = 0;
-      
-      // Calculate score based on matching genres
-      if (movie.genre_ids) {
-        movie.genre_ids.forEach(genreId => {
-          // If this genre is in our weights, add its weight to the score
-          if (genreWeights[genreId]) {
-            likabilityScore += genreWeights[genreId];
-          }
-          
-          // Add to max possible score the highest weight in our system
-          // This helps normalize the percentage
-          maxPossibleScore += Math.max(...Object.values(genreWeights), 1);
-        });
-      }
-      
-      // Boost score based on keywords - if this movie comes from a keyword search
-      // and it matches one of our top keywords
-      if (keywordTags.length > 0) {
-        // Matching with movie title and overview
-        const movieText = `${movie.title} ${movie.overview}`.toLowerCase();
-        
-        keywordTags.forEach(tag => {
-          const keywordWeight = tag.confirmed ? (tag.occurrences || 1) * 2 : (tag.occurrences || 1);
-          if (movieText.includes(tag.name.toLowerCase())) {
-            likabilityScore += keywordWeight * 2; // Double boost for direct matches
-            maxPossibleScore += keywordWeight * 2;
-          }
-        });
-      }
-      
-      // Calculate percentage, with a minimum of 50% as these are already recommended
-      const likabilityPercentage = maxPossibleScore > 0 
-        ? Math.min(100, Math.max(50, Math.round((likabilityScore / maxPossibleScore) * 100)))
-        : 70; // Default if we can't calculate
-      
-      return {
-        ...movie,
-        likabilityPercentage
-      };
-    });
-    
-    // Sort by likability percentage (high to low)
-    allResults.sort((a, b) => 
-      (b.likabilityPercentage || 0) - (a.likabilityPercentage || 0)
-    );
-    
-    return allResults;
+    return response.data.results;
   } catch (error) {
-    console.error('Error fetching tag-based recommendations:', error);
+    console.error('Error fetching popular movies:', error);
     return [];
   }
 };
+
+/**
+ * Search for movies by query
+ */
+export const searchMovies = async (query: string, page = 1): Promise<Movie[]> => {
+  try {
+    const response = await api.get('/search/movie', {
+      params: {
+        query,
+        page,
+        include_adult: false
+      }
+    });
+    
+    return response.data.results;
+  } catch (error) {
+    console.error('Error searching movies:', error);
+    return [];
+  }
+};
+
+/**
+ * Get movie details including genres
+ */
+export const getMovieDetails = async (movieId: number): Promise<Movie | null> => {
+  try {
+    const response = await api.get(`/movie/${movieId}`);
+    return response.data;
+  } catch (error) {
+    console.error(`Error fetching movie details for ID ${movieId}:`, error);
+    return null;
+  }
+};
+
+/**
+ * Get all available movie genres
+ */
+export const getGenres = async (): Promise<Genre[]> => {
+  try {
+    const response = await api.get('/genre/movie/list');
+    return response.data.genres;
+  } catch (error) {
+    console.error('Error fetching genres:', error);
+    return [];
+  }
+};
+
+/**
+ * Generate movie poster URL from poster_path
+ */
+export const getMoviePosterUrl = (posterPath: string | null): string => {
+  if (!posterPath) return '/placeholder.svg';
+  return `https://image.tmdb.org/t/p/w500${posterPath}`;
+};
+
+/**
+ * Get recommendations based on mood
+ */
+export const getMoodBasedRecommendations = async (
+  mood: string,
+  page = 1
+): Promise<Movie[]> => {
+  try {
+    // Map moods to genre combinations
+    const moodGenreMap: Record<string, number[]> = {
+      happy: [35, 10751, 12], // Comedy, Family, Adventure
+      sad: [18, 10749], // Drama, Romance
+      excited: [28, 12, 878], // Action, Adventure, Science Fiction
+      relaxed: [35, 10751, 14], // Comedy, Family, Fantasy
+      thoughtful: [18, 99, 36], // Drama, Documentary, History
+      tense: [53, 27, 9648], // Thriller, Horror, Mystery
+    };
+    
+    const genreIds = moodGenreMap[mood] || [28, 12]; // Default to Action/Adventure
+    
+    const response = await api.get('/discover/movie', {
+      params: {
+        with_genres: genreIds.join(','),
+        sort_by: 'popularity.desc',
+        page
+      }
+    });
+    
+    return response.data.results;
+  } catch (error) {
+    console.error('Error fetching mood recommendations:', error);
+    return [];
+  }
+};
+
+/**
+ * Extract tags from liked and disliked movies
+ */
+export const extractTagsFromMovies = async ({
+  likedMovies,
+  dislikedMovies
+}: {
+  likedMovies: Movie[],
+  dislikedMovies: Movie[]
+}): Promise<{ likedTags: Tag[], confirmedTags: Tag[] }> => {
+  // Ensure we have arrays to work with
+  const safelikedMovies = Array.isArray(likedMovies) ? likedMovies : [];
+  const safeDislikedMovies = Array.isArray(dislikedMovies) ? dislikedMovies : [];
+  
+  // Get all unique genres from liked movies
+  const genreTags: Record<string, Tag> = {};
+  const threshold = Math.max(2, Math.ceil(safelikedMovies.length * 0.3)); // 30% threshold or at least 2 movies
+  
+  // Get keywords for all liked movies
+  const keywordMap = await getMoviesKeywords(safelikedMovies);
+  
+  // Process liked movies for genre tags
+  for (const movie of safelikedMovies) {
+    // Process genre tags
+    if (movie.genres) {
+      // If movie has full genre objects
+      for (const genre of movie.genres) {
+        const tagId = `genre-${genre.id}`;
+        if (!genreTags[tagId]) {
+          genreTags[tagId] = {
+            id: tagId,
+            name: genre.name,
+            type: 'genre',
+            source: 'auto',
+            occurrences: 1,
+            dislikedOccurrences: 0,
+            movieIds: [movie.id],
+            dislikedMovieIds: []
+          };
+        } else {
+          genreTags[tagId].occurrences = (genreTags[tagId].occurrences || 0) + 1;
+          if (genreTags[tagId].movieIds) {
+            genreTags[tagId].movieIds.push(movie.id);
+          } else {
+            genreTags[tagId].movieIds = [movie.id];
+          }
+        }
+      }
+    } else if (movie.genre_ids) {
+      // If movie only has genre IDs, fetch genre names from API
+      const genreResponse = await getGenres();
+      const genreMap = Object.fromEntries(
+        genreResponse.map(genre => [genre.id, genre.name])
+      );
+      
+      for (const genreId of movie.genre_ids) {
+        const tagId = `genre-${genreId}`;
+        const genreName = genreMap[genreId] || `Genre ${genreId}`;
+        
+        if (!genreTags[tagId]) {
+          genreTags[tagId] = {
+            id: tagId,
+            name: genreName,
+            type: 'genre',
+            source: 'auto',
+            occurrences: 1,
+            dislikedOccurrences: 0,
+            movieIds: [movie.id],
+            dislikedMovieIds: []
+          };
+        } else {
+          genreTags[tagId].occurrences = (genreTags[tagId].occurrences || 0) + 1;
+          if (genreTags[tagId].movieIds) {
+            genreTags[tagId].movieIds.push(movie.id);
+          } else {
+            genreTags[tagId].movieIds = [movie.id];
+          }
+        }
+      }
+    }
+    
+    // Process keyword tags
+    const movieKeywords = keywordMap[movie.id] || [];
+    if (movieKeywords.length > 0) {
+      const keywordTags = processKeywordsToTags(movieKeywords, movie.id);
+      
+      // Add these keyword tags to our collection
+      for (const tag of keywordTags) {
+        const existingTag = genreTags[tag.id];
+        
+        if (existingTag) {
+          existingTag.occurrences = (existingTag.occurrences || 0) + (tag.occurrences || 1);
+          if (existingTag.movieIds && tag.movieIds) {
+            existingTag.movieIds = [...new Set([...existingTag.movieIds, ...tag.movieIds])];
+          }
+        } else {
+          genreTags[tag.id] = tag;
+        }
+      }
+    }
+  }
+  
+  // Process disliked movies
+  for (const movie of safeDislikedMovies) {
+    // Process genre tags for disliked movies
+    if (movie.genres) {
+      for (const genre of movie.genres) {
+        const tagId = `genre-${genre.id}`;
+        if (!genreTags[tagId]) {
+          genreTags[tagId] = {
+            id: tagId,
+            name: genre.name,
+            type: 'genre',
+            source: 'auto',
+            occurrences: 0,
+            dislikedOccurrences: 1,
+            movieIds: [],
+            dislikedMovieIds: [movie.id]
+          };
+        } else {
+          genreTags[tagId].dislikedOccurrences = (genreTags[tagId].dislikedOccurrences || 0) + 1;
+          if (genreTags[tagId].dislikedMovieIds) {
+            genreTags[tagId].dislikedMovieIds.push(movie.id);
+          } else {
+            genreTags[tagId].dislikedMovieIds = [movie.id];
+          }
+        }
+      }
+    } else if (movie.genre_ids) {
+      const genreResponse = await getGenres();
+      const genreMap = Object.fromEntries(
+        genreResponse.map(genre => [genre.id, genre.name])
+      );
+      
+      for (const genreId of movie.genre_ids) {
+        const tagId = `genre-${genreId}`;
+        const genreName = genreMap[genreId] || `Genre ${genreId}`;
+        
+        if (!genreTags[tagId]) {
+          genreTags[tagId] = {
+            id: tagId,
+            name: genreName,
+            type: 'genre',
+            source: 'auto',
+            occurrences: 0,
+            dislikedOccurrences: 1,
+            movieIds: [],
+            dislikedMovieIds: [movie.id]
+          };
+        } else {
+          genreTags[tagId].dislikedOccurrences = (genreTags[tagId].dislikedOccurrences || 0) + 1;
+          if (genreTags[tagId].dislikedMovieIds) {
+            genreTags[tagId].dislikedMovieIds.push(movie.id);
+          } else {
+            genreTags[tagId].dislikedMovieIds = [movie.id];
+          }
+        }
+      }
+    }
+    
+    // Process keyword tags for disliked movies
+    const movieKeywords = keywordMap[movie.id] || [];
+    if (movieKeywords.length > 0) {
+      const keywordTags = processKeywordsToTags(movieKeywords, movie.id);
+      
+      // Add these keyword tags to our collection as disliked
+      for (const tag of keywordTags) {
+        const existingTag = genreTags[tag.id];
+        
+        if (existingTag) {
+          existingTag.dislikedOccurrences = (existingTag.dislikedOccurrences || 0) + (tag.occurrences || 1);
+          if (existingTag.dislikedMovieIds && tag.movieIds) {
+            existingTag.dislikedMovieIds = [...new Set([
+              ...(existingTag.dislikedMovieIds || []), 
+              ...(tag.movieIds || [])
+            ])];
+          }
+        } else {
+          genreTags[tag.id] = {
+            ...tag,
+            occurrences: 0,
+            dislikedOccurrences: tag.occurrences || 1,
+            movieIds: [],
+            dislikedMovieIds: tag.movieIds || []
+          };
+        }
+      }
+    }
+  }
+  
+  // Convert to arrays and calculate which tags are confirmed
+  const allTags = Object.values(genreTags);
+  
+  // Sort by number of occurrences (descending)
+  const sortedTags = allTags.sort((a, b) => (b.occurrences || 0) - (a.occurrences || 0));
+  
+  // Separate confirmed vs liked tags
+  const confirmedTags = sortedTags.filter(tag => 
+    (tag.occurrences || 0) >= threshold && 
+    (tag.dislikedOccurrences || 0) < (tag.occurrences || 0)
+  );
+  
+  // Return all tags, but mark which ones are confirmed
+  return {
+    likedTags: sortedTags,
+    confirmedTags: confirmedTags.map(tag => ({ ...tag, confirmed: true }))
+  };
+};
+
+/**
+ * Categorize tags by type for UI organization
+ */
+export const categorizeTagsByType = (tags: Tag[]): Record<string, Tag[][]> => {
+  // Ensure tags is an array
+  if (!Array.isArray(tags)) {
+    console.warn('Tags is not an array in categorizeTagsByType');
+    return {};
+  }
+  
+  // Group tags by type
+  const tagsByType: Record<string, Tag[]> = {};
+  
+  for (const tag of tags) {
+    const type = tag.type || 'custom';
+    if (!tagsByType[type]) {
+      tagsByType[type] = [];
+    }
+    tagsByType[type].push(tag);
+  }
+  
+  // For each type, group tags by semantic similarity
+  const result: Record<string, Tag[][]> = {};
+  
+  Object.entries(tagsByType).forEach(([type, tagsOfType]) => {
+    // Sort tags by occurrences
+    const sortedTags = [...tagsOfType].sort((a, b) => 
+      ((b.occurrences || 0) + (b.confirmed ? 5 : 0)) - 
+      ((a.occurrences || 0) + (a.confirmed ? 5 : 0))
+    );
+    
+    // For now, just put all tags in one group
+    // In a future version, we could group by semantic similarity
+    result[type] = [sortedTags];
+  });
+  
+  return result;
+};
+
+// Re-export getTagBasedRecommendations from the existing code
+export { getTagBasedRecommendations };

@@ -27,7 +27,6 @@ const MovieDetailDialog: React.FC<MovieDetailDialogProps> = ({ movie, open, onOp
   
   if (!movie) return null;
   
-  // Add null checks for all arrays
   const isLiked = profile.likedMovies?.some(m => m.id === movie.id) || false;
   const isDisliked = profile.dislikedMovies?.some(m => m.id === movie.id) || false;
   const isWatchLater = profile.watchLaterMovies?.some(m => m.id === movie.id) || false;
