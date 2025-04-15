@@ -1,3 +1,4 @@
+
 import { Movie, Tag, Genre } from '@/types';
 import axios from 'axios';
 import { processKeywordsToTags, getMoviesKeywords } from './keywordService';
@@ -414,5 +415,4 @@ export const getTagBasedRecommendations = async (
   }
 };
 
-// Re-export getTagBasedRecommendations from the existing code
-export { getTagBasedRecommendations };
+// Remove the duplicate export statement here
