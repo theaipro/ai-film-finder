@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, RefreshCw, Tag as TagIcon, ThumbsUp, CirclePercent, Plus, Filter, CheckSquare, Square } from 'lucide-react';
+import { ArrowRight, RefreshCw, Tag as TagIcon, ThumbsUp, CirclePercent, Plus, Filter, CheckSquare, Square, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
