@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowRight, RefreshCw, Tag as TagIcon, ThumbsUp, CirclePercent } from 'lucide-react';
+import { ArrowRight, RefreshCw, Tag as TagIcon, ThumbsUp, CirclePercent, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +13,8 @@ import {
   getTagBasedRecommendations, 
   getMoodBasedRecommendations,
   getPopularMovies,
-  categorizeTagsByType
+  categorizeTagsByType,
+  groupTagsByWeight
 } from '@/services/movieService';
 import { Movie, Mood, Tag } from '@/types';
 import { toast } from 'sonner';
@@ -24,23 +25,33 @@ const Recommendations = () => {
   const [loading, setLoading] = useState(false);
   const [showMoodSelector, setShowMoodSelector] = useState(false);
   const [categorizedTags, setCategorizedTags] = useState<Record<string, Tag[][]>>({});
+  const [usedTagTiers, setUsedTagTiers] = useState(0);
+  const [totalTagTiers, setTotalTagTiers] = useState(0);
+  const [canShowMore, setCanShowMore] = useState(false);
   
   useEffect(() => {
     // Ensure profile.tags is an array before calling categorizeTagsByType
     if (profile.tags && Array.isArray(profile.tags) && profile.tags.length > 0) {
       setCategorizedTags(categorizeTagsByType(profile.tags));
+      
+      // Calculate total available tag tiers
+      const tagTiers = groupTagsByWeight(profile.tags);
+      setTotalTagTiers(tagTiers.length);
     } else {
       setCategorizedTags({});
+      setTotalTagTiers(0);
     }
   }, [profile.tags]);
   
-  const fetchRecommendations = async () => {
+  const fetchRecommendations = async (relaxConstraints = false) => {
     try {
       setLoading(true);
       let movies: Movie[] = [];
       
       if (profile.currentMood) {
         movies = await getMoodBasedRecommendations(profile.currentMood);
+        setUsedTagTiers(0);
+        setCanShowMore(false);
       } else if (profile.tags && Array.isArray(profile.tags) && profile.tags.length > 0) {
         const likedMovieIds = Array.isArray(profile.likedMovies) ? profile.likedMovies.map(m => m.id) : [];
         const dislikedMovieIds = Array.isArray(profile.dislikedMovies) ? profile.dislikedMovies.map(m => m.id) : [];
@@ -49,15 +60,27 @@ const Recommendations = () => {
         const tagsForRecommendation = profile.tags;
         const avoidedTags = Array.isArray(profile.avoidedTags) ? profile.avoidedTags : [];
         
-        movies = await getTagBasedRecommendations(
+        // If relaxing constraints, add more tiers
+        const targetTiers = relaxConstraints ? usedTagTiers + 1 : 1;
+        
+        const result = await getTagBasedRecommendations(
           tagsForRecommendation,
           likedMovieIds,
           dislikedMovieIds,
           avoidedMovieIds,
-          avoidedTags
+          avoidedTags,
+          6 // Target minimum of 6 results
         );
+        
+        movies = result.movies;
+        setUsedTagTiers(result.usedTiers);
+        
+        // Can show more if we haven't used all tiers yet
+        setCanShowMore(result.usedTiers < totalTagTiers);
       } else {
         movies = await getPopularMovies();
+        setUsedTagTiers(0);
+        setCanShowMore(false);
       }
       
       if (movies && movies.length > 0) {
@@ -68,14 +91,24 @@ const Recommendations = () => {
         ];
         
         const filteredMovies = movies.filter(movie => !existingMovieIds.includes(movie.id));
-        setRecommendations(filteredMovies);
-      } else {
+        
+        if (relaxConstraints) {
+          // Append to existing recommendations if relaxing constraints
+          setRecommendations(prev => [...prev, ...filteredMovies]);
+        } else {
+          // Replace recommendations if doing a fresh search
+          setRecommendations(filteredMovies);
+        }
+      } else if (!relaxConstraints) {
+        // Only clear recommendations if not relaxing constraints
         setRecommendations([]);
       }
     } catch (error) {
       console.error("Error fetching recommendations:", error);
       toast.error("Failed to fetch recommendations. Please try again.");
-      setRecommendations([]);
+      if (!relaxConstraints) {
+        setRecommendations([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -91,7 +124,11 @@ const Recommendations = () => {
   };
   
   const handleRefresh = () => {
-    fetchRecommendations();
+    fetchRecommendations(false); // Start fresh
+  };
+  
+  const handleShowMore = () => {
+    fetchRecommendations(true); // Relax constraints
   };
   
   const handleMovieDetails = (movie: Movie) => {
@@ -195,6 +232,11 @@ const Recommendations = () => {
                 <div className="flex items-center gap-2">
                   <TagIcon className="h-4 w-4 text-film-primary" />
                   <span className="text-sm font-medium">Based on your preferences:</span>
+                  {usedTagTiers > 0 && (
+                    <Badge variant="outline" className="ml-2 bg-blue-100 dark:bg-blue-900/30">
+                      Using {usedTagTiers} of {totalTagTiers} tag tiers
+                    </Badge>
+                  )}
                 </div>
                 
                 {renderCategorizedTags()}
@@ -225,33 +267,56 @@ const Recommendations = () => {
           )}
           
           <div className="mb-8">
-            {loading ? (
+            {loading && !recommendations.length ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {Array(8).fill(null).map((_, index) => (
                   <div key={index} className="rounded-lg bg-muted animate-pulse h-[380px]"></div>
                 ))}
               </div>
             ) : recommendations.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {recommendations.map(movie => (
-                  <div key={movie.id} className="relative">
-                    <MovieCard 
-                      movie={movie} 
-                      onViewDetails={handleMovieDetails}
-                    />
-                    {movie.likabilityPercentage && (
-                      <div className="absolute top-2 right-2">
-                        <LikabilityBadge percentage={movie.likabilityPercentage} />
-                      </div>
-                    )}
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {recommendations.map(movie => (
+                    <div key={movie.id} className="relative">
+                      <MovieCard 
+                        movie={movie} 
+                        onViewDetails={handleMovieDetails}
+                      />
+                      {movie.likabilityPercentage && (
+                        <div className="absolute top-2 right-2">
+                          <LikabilityBadge percentage={movie.likabilityPercentage} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Show More button */}
+                {canShowMore && !loading && (
+                  <div className="flex justify-center mt-8">
+                    <Button 
+                      onClick={handleShowMore} 
+                      variant="outline" 
+                      className="w-full md:w-auto"
+                      disabled={loading}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Show More Movies
+                    </Button>
                   </div>
-                ))}
-              </div>
+                )}
+                
+                {loading && (
+                  <div className="flex justify-center mt-8">
+                    <div className="rounded-lg bg-muted animate-pulse h-10 w-40"></div>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-12">
                 <p className="text-lg font-medium mb-2">No recommendations found</p>
                 <p className="text-muted-foreground mb-4">
-                  Try changing your mood or adding more movies to your liked list.
+                  Try changing your mood, adding more movies to your liked list, or relaxing your tag filters.
                 </p>
                 <Button onClick={handleRefresh}>
                   <RefreshCw className="h-4 w-4 mr-2" />

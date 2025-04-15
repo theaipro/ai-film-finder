@@ -1,4 +1,3 @@
-
 import { Movie, Tag, Genre } from '@/types';
 import axios from 'axios';
 import { processKeywordsToTags, getMoviesKeywords } from './keywordService';
@@ -371,48 +370,155 @@ export const categorizeTagsByType = (tags: Tag[]): Record<string, Tag[][]> => {
 };
 
 /**
- * Get recommendations based on tags
+ * Group tags by weight (confirmed status and occurrences)
+ * @param tags List of tags to group
+ * @returns Tags grouped in weight tiers (higher weight = higher priority)
+ */
+export const groupTagsByWeight = (tags: Tag[]): Tag[][] => {
+  if (!Array.isArray(tags) || tags.length === 0) return [];
+  
+  // Calculate tag weights and sort
+  const tagsWithWeight = tags.map(tag => ({
+    ...tag,
+    weight: (tag.confirmed ? 5 : 0) + (tag.occurrences || 1) + (tag.override ? 3 : 0)
+  })).sort((a, b) => b.weight - a.weight);
+  
+  // Group into tiers
+  const tiers: Tag[][] = [];
+  let currentTier: Tag[] = [];
+  let currentWeight = tagsWithWeight[0].weight;
+  
+  tagsWithWeight.forEach(tag => {
+    if (Math.abs(tag.weight - currentWeight) > 2) {
+      // Weight difference significant enough to create a new tier
+      if (currentTier.length > 0) {
+        tiers.push([...currentTier]);
+        currentTier = [];
+      }
+      currentWeight = tag.weight;
+    }
+    currentTier.push(tag);
+  });
+  
+  // Add the last tier if not empty
+  if (currentTier.length > 0) {
+    tiers.push(currentTier);
+  }
+  
+  return tiers;
+};
+
+/**
+ * Get recommendations based on tags with a cascading filter approach
+ * Starts with highest weight tags and gradually relaxes constraints until enough movies are found
  */
 export const getTagBasedRecommendations = async (
   tags: Tag[],
   likedMovieIds: number[] = [],
   dislikedMovieIds: number[] = [],
   avoidedMovieIds: number[] = [],
-  avoidedTags: Tag[] = []
-): Promise<Movie[]> => {
+  avoidedTags: Tag[] = [],
+  minResults: number = 6
+): Promise<{ movies: Movie[], usedTiers: number }> => {
   try {
-    // Convert tags to a query that can be used with TMDB's discover endpoint
-    const genreTags = tags.filter(tag => tag.type === 'genre');
-    const keywordTags = tags.filter(tag => tag.type === 'keyword');
-
-    // Prepare genre IDs and keyword IDs for filtering
-    const genreIds = genreTags.map(tag => parseInt(tag.id.split('-')[1]));
-    const keywordIds = keywordTags.map(tag => parseInt(tag.id.split('-')[1]));
-
-    const response = await api.get('/discover/movie', {
-      params: {
-        with_genres: genreIds.length > 0 ? genreIds.join(',') : undefined,
-        with_keywords: keywordIds.length > 0 ? keywordIds.join('|') : undefined,
-        without_genres: genreIds.length > 0 ? avoidedTags
-          .filter(tag => tag.type === 'genre')
-          .map(tag => parseInt(tag.id.split('-')[1]))
-          .join(',')
-          : undefined,
-        without_keywords: keywordIds.length > 0 ? avoidedTags
-          .filter(tag => tag.type === 'keyword')
-          .map(tag => parseInt(tag.id.split('-')[1]))
-          .join('|')
-          : undefined,
-        without_id: [...likedMovieIds, ...dislikedMovieIds, ...avoidedMovieIds].join('|'),
-        sort_by: 'popularity.desc'
+    console.log("Starting tag-based recommendations with", tags.length, "tags");
+    
+    // Group tags into tiers by weight
+    const tagTiers = groupTagsByWeight(tags);
+    console.log("Tags grouped into", tagTiers.length, "tiers");
+    
+    if (tagTiers.length === 0) {
+      console.log("No tag tiers found, returning popular movies");
+      const popularMovies = await getPopularMovies();
+      return { 
+        movies: popularMovies.filter(movie => 
+          ![...likedMovieIds, ...dislikedMovieIds, ...avoidedMovieIds].includes(movie.id)
+        ),
+        usedTiers: 0 
+      };
+    }
+    
+    // Start with highest tier only, then gradually add more tiers until we have enough results
+    let allUsedTags: Tag[] = [];
+    let results: Movie[] = [];
+    let usedTiers = 0;
+    
+    for (let i = 0; i < tagTiers.length; i++) {
+      usedTiers = i + 1;
+      // Accumulate tags up to this tier
+      allUsedTags = tagTiers.slice(0, i + 1).flat();
+      console.log(`Trying with ${allUsedTags.length} tags from ${i + 1} tiers`);
+      
+      // Extract genre and keyword tags
+      const genreTags = allUsedTags.filter(tag => tag.type === 'genre');
+      const keywordTags = allUsedTags.filter(tag => tag.type === 'keyword');
+      
+      // Prepare parameters for API request
+      const genreIds = genreTags.map(tag => {
+        const match = tag.id.match(/genre-(\d+)/);
+        return match ? parseInt(match[1]) : NaN;
+      }).filter(id => !isNaN(id));
+      
+      const keywordIds = keywordTags.map(tag => {
+        const match = tag.id.match(/keyword-(\d+)/);
+        return match ? parseInt(match[1]) : NaN;
+      }).filter(id => !isNaN(id));
+      
+      // Prepare avoided genres and keywords
+      const avoidedGenreIds = avoidedTags
+        .filter(tag => tag.type === 'genre')
+        .map(tag => {
+          const match = tag.id.match(/genre-(\d+)/);
+          return match ? parseInt(match[1]) : NaN;
+        })
+        .filter(id => !isNaN(id));
+      
+      const avoidedKeywordIds = avoidedTags
+        .filter(tag => tag.type === 'keyword')
+        .map(tag => {
+          const match = tag.id.match(/keyword-(\d+)/);
+          return match ? parseInt(match[1]) : NaN;
+        })
+        .filter(id => !isNaN(id));
+      
+      // Movies to exclude (liked, disliked, avoided)
+      const excludeMovieIds = [...likedMovieIds, ...dislikedMovieIds, ...avoidedMovieIds];
+      
+      console.log("API request with:", {
+        genreIds: genreIds.join(','),
+        keywordIds: keywordIds.join('|'),
+        avoidedGenreIds: avoidedGenreIds.join(','),
+        avoidedKeywordIds: avoidedKeywordIds.join('|'),
+        excludeCount: excludeMovieIds.length
+      });
+      
+      // Make API request with current set of tags
+      const response = await api.get('/discover/movie', {
+        params: {
+          with_genres: genreIds.length > 0 ? genreIds.join(',') : undefined,
+          with_keywords: keywordIds.length > 0 ? keywordIds.join('|') : undefined,
+          without_genres: avoidedGenreIds.length > 0 ? avoidedGenreIds.join(',') : undefined,
+          without_keywords: avoidedKeywordIds.length > 0 ? avoidedKeywordIds.join('|') : undefined,
+          without_id: excludeMovieIds.length > 0 ? excludeMovieIds.join('|') : undefined,
+          sort_by: 'popularity.desc',
+          page: 1
+        }
+      });
+      
+      results = response.data.results || [];
+      console.log(`Found ${results.length} movies with ${i + 1} tiers`);
+      
+      // If we have enough results, stop adding tiers
+      if (results.length >= minResults) {
+        break;
       }
-    });
-
-    return response.data.results;
+    }
+    
+    console.log(`Final results: ${results.length} movies using ${usedTiers} tiers`);
+    return { movies: results, usedTiers };
+    
   } catch (error) {
     console.error('Error fetching tag-based recommendations:', error);
-    return [];
+    return { movies: [], usedTiers: 0 };
   }
 };
-
-// Remove the duplicate export statement here
