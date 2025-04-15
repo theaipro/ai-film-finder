@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, RefreshCw, Tag as TagIcon, ThumbsUp, CirclePercent } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -25,8 +26,11 @@ const Recommendations = () => {
   const [categorizedTags, setCategorizedTags] = useState<Record<string, Tag[][]>>({});
   
   useEffect(() => {
-    if (profile.tags && profile.tags.length > 0) {
+    // Ensure profile.tags is an array before calling categorizeTagsByType
+    if (profile.tags && Array.isArray(profile.tags) && profile.tags.length > 0) {
       setCategorizedTags(categorizeTagsByType(profile.tags));
+    } else {
+      setCategorizedTags({});
     }
   }, [profile.tags]);
   
@@ -37,13 +41,13 @@ const Recommendations = () => {
       
       if (profile.currentMood) {
         movies = await getMoodBasedRecommendations(profile.currentMood);
-      } else if (profile.tags && profile.tags.length > 0) {
-        const likedMovieIds = profile.likedMovies ? profile.likedMovies.map(m => m.id) : [];
-        const dislikedMovieIds = profile.dislikedMovies ? profile.dislikedMovies.map(m => m.id) : [];
-        const avoidedMovieIds = profile.avoidedMovies ? profile.avoidedMovies.map(m => m.id) : [];
+      } else if (profile.tags && Array.isArray(profile.tags) && profile.tags.length > 0) {
+        const likedMovieIds = Array.isArray(profile.likedMovies) ? profile.likedMovies.map(m => m.id) : [];
+        const dislikedMovieIds = Array.isArray(profile.dislikedMovies) ? profile.dislikedMovies.map(m => m.id) : [];
+        const avoidedMovieIds = Array.isArray(profile.avoidedMovies) ? profile.avoidedMovies.map(m => m.id) : [];
         
         const tagsForRecommendation = profile.tags;
-        const avoidedTags = profile.avoidedTags || [];
+        const avoidedTags = Array.isArray(profile.avoidedTags) ? profile.avoidedTags : [];
         
         movies = await getTagBasedRecommendations(
           tagsForRecommendation,
@@ -58,9 +62,9 @@ const Recommendations = () => {
       
       if (movies && movies.length > 0) {
         const existingMovieIds = [
-          ...(profile.likedMovies || []).map(m => m.id),
-          ...(profile.dislikedMovies || []).map(m => m.id),
-          ...(profile.avoidedMovies || []).map(m => m.id)
+          ...(Array.isArray(profile.likedMovies) ? profile.likedMovies.map(m => m.id) : []),
+          ...(Array.isArray(profile.dislikedMovies) ? profile.dislikedMovies.map(m => m.id) : []),
+          ...(Array.isArray(profile.avoidedMovies) ? profile.avoidedMovies.map(m => m.id) : [])
         ];
         
         const filteredMovies = movies.filter(movie => !existingMovieIds.includes(movie.id));
@@ -185,7 +189,7 @@ const Recommendations = () => {
             </Alert>
           )}
           
-          {profile.tags && profile.tags.length > 0 && !profile.currentMood && (
+          {profile.tags && Array.isArray(profile.tags) && profile.tags.length > 0 && !profile.currentMood && (
             <Alert className="mb-6 bg-film-tag/50 border-film-primary/20">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -207,7 +211,7 @@ const Recommendations = () => {
             </div>
           )}
           
-          {(!profile.likedMovies || profile.likedMovies.length === 0) && (
+          {(!profile.likedMovies || !Array.isArray(profile.likedMovies) || profile.likedMovies.length === 0) && (
             <Alert className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-900">
               <AlertDescription className="flex items-center">
                 <ThumbsUp className="h-4 w-4 mr-2 text-yellow-600 dark:text-yellow-400" />

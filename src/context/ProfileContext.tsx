@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Movie, Tag, Mood, UserProfile } from '@/types';
 import { extractTagsFromMovies } from '@/services/movieService';
@@ -54,7 +55,23 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [profile, setProfile] = useState<UserProfile>(() => {
     // Try to load from localStorage
     const savedProfile = localStorage.getItem('userProfile');
-    return savedProfile ? JSON.parse(savedProfile) : initialProfile;
+    if (savedProfile) {
+      // Ensure all arrays are initialized even if they're missing in saved data
+      const parsedProfile = JSON.parse(savedProfile);
+      return {
+        ...initialProfile, // Start with all defaults
+        ...parsedProfile,  // Override with saved values
+        // Ensure these critical arrays exist and are arrays
+        likedMovies: Array.isArray(parsedProfile.likedMovies) ? parsedProfile.likedMovies : [],
+        dislikedMovies: Array.isArray(parsedProfile.dislikedMovies) ? parsedProfile.dislikedMovies : [],
+        avoidedMovies: Array.isArray(parsedProfile.avoidedMovies) ? parsedProfile.avoidedMovies : [],
+        watchLaterMovies: Array.isArray(parsedProfile.watchLaterMovies) ? parsedProfile.watchLaterMovies : [],
+        likedTags: Array.isArray(parsedProfile.likedTags) ? parsedProfile.likedTags : [],
+        confirmedTags: Array.isArray(parsedProfile.confirmedTags) ? parsedProfile.confirmedTags : [],
+        avoidedTags: Array.isArray(parsedProfile.avoidedTags) ? parsedProfile.avoidedTags : [],
+      };
+    }
+    return initialProfile;
   });
 
   // Save to localStorage whenever profile changes
@@ -524,10 +541,13 @@ export const useProfile = () => {
     ...context.profile,
     // For backward compatibility, combine confirmed tags as the primary tags
     tags: [
-      ...context.profile.confirmedTags,
-      ...context.profile.likedTags.filter(lt => 
-        !context.profile.confirmedTags.some(ct => ct.id === lt.id)
-      )
+      ...(Array.isArray(context.profile.confirmedTags) ? context.profile.confirmedTags : []),
+      ...(Array.isArray(context.profile.likedTags) 
+        ? context.profile.likedTags.filter(lt => 
+            !Array.isArray(context.profile.confirmedTags) || 
+            !context.profile.confirmedTags.some(ct => ct.id === lt.id)
+          )
+        : [])
     ]
   };
 

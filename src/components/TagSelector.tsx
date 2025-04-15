@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Tag } from '@/types';
 import { X, Plus, Star, ChevronUp, ChevronDown, CirclePercent } from 'lucide-react';
@@ -15,14 +14,23 @@ interface TagSelectorProps {
   onRemoveTag: (tagId: string) => void;
 }
 
-const TagSelector: React.FC<TagSelectorProps> = ({ tags, onAddTag, onRemoveTag }) => {
+const TagSelector: React.FC<TagSelectorProps> = ({ 
+  tags, 
+  onAddTag, 
+  onRemoveTag 
+}) => {
   const { promoteTagToConfirmed, demoteTagFromConfirmed } = useProfile();
   const [newTagName, setNewTagName] = useState('');
   const [categorizedTags, setCategorizedTags] = useState<Record<string, Tag[][]>>({});
 
   // Categorize tags when they change
   useEffect(() => {
-    setCategorizedTags(categorizeTagsByType(tags));
+    // Ensure tags is an array before calling categorizeTagsByType
+    if (Array.isArray(tags)) {
+      setCategorizedTags(categorizeTagsByType(tags));
+    } else {
+      setCategorizedTags({});
+    }
   }, [tags]);
 
   const handleAddTag = () => {

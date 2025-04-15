@@ -347,6 +347,12 @@ export const getTagBasedRecommendations = async (
 
 // Group tags by category (type) in batches of 5
 export const categorizeTagsByType = (tags: Tag[]): Record<string, Tag[][]> => {
+  // Ensure tags is an array
+  if (!Array.isArray(tags)) {
+    console.warn('categorizeTagsByType called with non-array tags');
+    return {};
+  }
+  
   // Group tags by type first
   const tagsByType: Record<string, Tag[]> = {};
   
