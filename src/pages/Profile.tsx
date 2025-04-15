@@ -182,7 +182,7 @@ const Profile = () => {
                       <span className="text-xs">({profile.avoidedMovies.length})</span>
                     </TabsTrigger>
                     <TabsTrigger value="tags" className="flex items-center gap-1">
-                      <Tag className="h-4 w-4" />
+                      <TagIcon className="h-4 w-4" />
                       <span className="sr-only md:not-sr-only">Tags</span>
                       <span className="text-xs">({profile.tags.length})</span>
                     </TabsTrigger>
