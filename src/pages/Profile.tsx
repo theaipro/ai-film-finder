@@ -41,7 +41,11 @@ const Profile = () => {
   useEffect(() => {
     const generateTags = async () => {
       if (profile.likedMovies.length > 0) {
-        const { likedTags, confirmedTags } = await extractTagsFromMovies(profile.likedMovies);
+        // Update: Pass an object with likedMovies and dislikedMovies properties
+        const { likedTags, confirmedTags } = await extractTagsFromMovies({
+          likedMovies: profile.likedMovies,
+          dislikedMovies: profile.dislikedMovies
+        });
         // Combine both sets of tags for suggested tags
         const mergedTags = [...confirmedTags];
         
@@ -302,3 +306,4 @@ const Profile = () => {
 };
 
 export default Profile;
+
