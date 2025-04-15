@@ -40,17 +40,12 @@ const AIFloatingChat = () => {
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    // Delayed scrolling to ensure content is rendered first
-    const scrollTimer = setTimeout(() => {
-      if (scrollAreaRef.current) {
-        const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-        if (scrollContainer) {
-          scrollContainer.scrollTop = scrollContainer.scrollHeight;
-        }
+    if (scrollAreaRef.current) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
       }
-    }, 50);
-    
-    return () => clearTimeout(scrollTimer);
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -117,7 +112,7 @@ const AIFloatingChat = () => {
   const ChatContent = () => (
     <div className="flex flex-col h-full">
       <ScrollArea className="flex-1 p-3" ref={scrollAreaRef}>
-        <div className="flex flex-col gap-3 pb-4">
+        <div className="flex flex-col gap-3">
           {messages.map((message) => (
             <div key={message.id} className="space-y-3">
               <AIChatMessage message={message} />
@@ -142,8 +137,8 @@ const AIFloatingChat = () => {
         </div>
       </ScrollArea>
       
-      <div className="border-t p-3 sticky bottom-0 bg-background">
-        <form onSubmit={handleSubmit} className="flex gap-2">
+      <form onSubmit={handleSubmit} className="border-t p-3">
+        <div className="flex gap-2">
           <Input
             ref={inputRef}
             value={inputValue}
@@ -163,8 +158,8 @@ const AIFloatingChat = () => {
               <Send className="h-4 w-4" />
             )}
           </Button>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
   );
 
@@ -179,13 +174,7 @@ const AIFloatingChat = () => {
             <MessageSquare className="h-6 w-6" />
           </Button>
         </DrawerTrigger>
-        <DrawerContent className="h-[80vh]">
-          <div className="flex items-center justify-between p-3 border-b">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-primary" />
-              <h3 className="font-medium">Movie AI Assistant</h3>
-            </div>
-          </div>
+        <DrawerContent className="h-[90vh]">
           <ChatContent />
         </DrawerContent>
       </Drawer>
