@@ -1,4 +1,3 @@
-
 import { Movie, Tag, Genre } from '@/types';
 import axios from 'axios';
 import { processKeywordsToTags, getMoviesKeywords } from './keywordService';
@@ -368,6 +367,51 @@ export const categorizeTagsByType = (tags: Tag[]): Record<string, Tag[][]> => {
   });
   
   return result;
+};
+
+/**
+ * Get recommendations based on tags
+ */
+export const getTagBasedRecommendations = async (
+  tags: Tag[],
+  likedMovieIds: number[] = [],
+  dislikedMovieIds: number[] = [],
+  avoidedMovieIds: number[] = [],
+  avoidedTags: Tag[] = []
+): Promise<Movie[]> => {
+  try {
+    // Convert tags to a query that can be used with TMDB's discover endpoint
+    const genreTags = tags.filter(tag => tag.type === 'genre');
+    const keywordTags = tags.filter(tag => tag.type === 'keyword');
+
+    // Prepare genre IDs and keyword IDs for filtering
+    const genreIds = genreTags.map(tag => parseInt(tag.id.split('-')[1]));
+    const keywordIds = keywordTags.map(tag => parseInt(tag.id.split('-')[1]));
+
+    const response = await api.get('/discover/movie', {
+      params: {
+        with_genres: genreIds.length > 0 ? genreIds.join(',') : undefined,
+        with_keywords: keywordIds.length > 0 ? keywordIds.join('|') : undefined,
+        without_genres: genreIds.length > 0 ? avoidedTags
+          .filter(tag => tag.type === 'genre')
+          .map(tag => parseInt(tag.id.split('-')[1]))
+          .join(',')
+          : undefined,
+        without_keywords: keywordIds.length > 0 ? avoidedTags
+          .filter(tag => tag.type === 'keyword')
+          .map(tag => parseInt(tag.id.split('-')[1]))
+          .join('|')
+          : undefined,
+        without_id: [...likedMovieIds, ...dislikedMovieIds, ...avoidedMovieIds].join('|'),
+        sort_by: 'popularity.desc'
+      }
+    });
+
+    return response.data.results;
+  } catch (error) {
+    console.error('Error fetching tag-based recommendations:', error);
+    return [];
+  }
 };
 
 // Re-export getTagBasedRecommendations from the existing code
